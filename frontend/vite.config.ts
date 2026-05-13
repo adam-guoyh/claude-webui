@@ -12,6 +12,19 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, resolve(__dirname, ".."), "");
   const apiPort = env.PORT || "8080";
 
+  // Allow custom hostnames via VITE_ALLOWED_HOSTS (comma-separated). Pass `*`
+  // to disable the host check entirely — only do this on trusted networks.
+  const allowedHostsEnv = env.VITE_ALLOWED_HOSTS?.trim();
+  const allowedHosts =
+    allowedHostsEnv === "*"
+      ? (true as const)
+      : allowedHostsEnv
+        ? allowedHostsEnv
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -21,6 +34,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
+      ...(allowedHosts !== undefined ? { allowedHosts } : {}),
       proxy: {
         "/api": {
           target: `http://localhost:${apiPort}`,
