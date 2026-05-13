@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PlusIcon,
   ChatBubbleLeftRightIcon,
   XMarkIcon,
+  PencilSquareIcon,
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
 import type { ConversationSummary } from "../../../../shared/types";
-import { getHistoriesUrl } from "../../config/api";
+import { getHistoriesUrl, getSessionTitleUrl } from "../../config/api";
 import { authFetch } from "../../utils/authFetch";
 // Side-effect: extends dayjs with the relativeTime plugin used below.
 import "../../utils/time";
@@ -25,6 +26,14 @@ interface SessionSidebarProps {
   onClose?: () => void;
 }
 
+function displayName(c: ConversationSummary): string {
+  return (
+    c.customTitle ||
+    c.lastMessagePreview ||
+    `Session ${c.sessionId.slice(0, 8)}`
+  );
+}
+
 export function SessionSidebar({
   encodedName,
   currentSessionId,
@@ -38,10 +47,12 @@ export function SessionSidebar({
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!encodedName) {
-      // Project lookup still in flight; keep current state.
       return;
     }
 
@@ -72,18 +83,73 @@ export function SessionSidebar({
     };
   }, [encodedName, refreshKey]);
 
+  // Focus + select the rename input when entering edit mode.
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingId]);
+
   const handleSelect = useCallback(
     (sessionId: string) => {
+      if (editingId) return; // don't navigate while renaming
       onSelectSession(sessionId);
       if (drawerMode) onClose?.();
     },
-    [onSelectSession, drawerMode, onClose],
+    [onSelectSession, drawerMode, onClose, editingId],
   );
 
   const handleNew = useCallback(() => {
     onNewChat();
     if (drawerMode) onClose?.();
   }, [onNewChat, drawerMode, onClose]);
+
+  const beginRename = useCallback((c: ConversationSummary) => {
+    setEditingId(c.sessionId);
+    setDraft(c.customTitle ?? "");
+  }, []);
+
+  const cancelRename = useCallback(() => {
+    setEditingId(null);
+    setDraft("");
+  }, []);
+
+  const commitRename = useCallback(
+    async (sessionId: string) => {
+      if (!encodedName) return;
+      // Empty draft clears the custom title back to the preview default.
+      const title = draft.trim() === "" ? null : draft.trim();
+      try {
+        const res = await authFetch(
+          getSessionTitleUrl(encodedName, sessionId),
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title }),
+          },
+        );
+        if (!res.ok) {
+          throw new Error(`Save failed: ${res.statusText}`);
+        }
+        // Optimistically merge the new title into local state — avoids
+        // showing stale data until the next refetch.
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.sessionId === sessionId
+              ? { ...c, customTitle: title ?? undefined }
+              : c,
+          ),
+        );
+      } catch (e) {
+        // Surface failure as the inline list-level error banner.
+        setError(e instanceof Error ? e.message : "Save failed");
+      } finally {
+        cancelRename();
+      }
+    },
+    [encodedName, draft, cancelRename],
+  );
 
   return (
     <aside
@@ -126,30 +192,74 @@ export function SessionSidebar({
         ) : (
           conversations.map((c) => {
             const isActive = c.sessionId === currentSessionId;
+            const isEditing = editingId === c.sessionId;
             return (
-              <button
+              <div
                 key={c.sessionId}
-                onClick={() => handleSelect(c.sessionId)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                className={`group px-3 py-2 rounded-md text-sm transition-colors ${
                   isActive
                     ? "bg-blue-100 dark:bg-blue-900/40 text-slate-900 dark:text-slate-100"
                     : "hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-300"
                 }`}
-                title={c.lastMessagePreview}
+                title={c.customTitle ?? c.lastMessagePreview}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">
-                    {c.lastMessagePreview ||
-                      `Session ${c.sessionId.slice(0, 8)}`}
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 shrink-0">
-                    {dayjs(c.lastTime).fromNow(true)}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {t("sidebar.msgCount", { count: c.messageCount })}
-                </div>
-              </button>
+                {isEditing ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void commitRename(c.sessionId);
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <input
+                      ref={inputRef}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onBlur={() => void commitRename(c.sessionId)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelRename();
+                        }
+                      }}
+                      placeholder={t("sidebar.renamePlaceholder")}
+                      className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      maxLength={200}
+                    />
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => handleSelect(c.sessionId)}
+                        className="flex-1 min-w-0 text-left truncate font-medium"
+                      >
+                        {displayName(c)}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          beginRename(c);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-opacity"
+                        aria-label={t("sidebar.renameAria")}
+                        title={t("sidebar.renameAria")}
+                      >
+                        <PencilSquareIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleSelect(c.sessionId)}
+                      className="w-full text-left text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center justify-between gap-2"
+                    >
+                      <span>
+                        {t("sidebar.msgCount", { count: c.messageCount })}
+                      </span>
+                      <span>{dayjs(c.lastTime).fromNow(true)}</span>
+                    </button>
+                  </>
+                )}
+              </div>
             );
           })
         )}

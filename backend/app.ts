@@ -14,7 +14,10 @@ import {
 } from "./middleware/config.ts";
 import { createAuthMiddleware } from "./middleware/auth.ts";
 import { handleProjectsRequest } from "./handlers/projects.ts";
-import { handleHistoriesRequest } from "./handlers/histories.ts";
+import {
+  handleHistoriesRequest,
+  handleSetSessionTitleRequest,
+} from "./handlers/histories.ts";
 import { handleConversationRequest } from "./handlers/conversations.ts";
 import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
@@ -42,8 +45,8 @@ export function createApp(
     "*",
     cors({
       origin: "*",
-      allowMethods: ["GET", "POST", "OPTIONS"],
-      allowHeaders: ["Content-Type"],
+      allowMethods: ["GET", "POST", "PUT", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"],
     }),
   );
 
@@ -82,6 +85,10 @@ export function createApp(
 
   app.get("/api/projects/:encodedProjectName/histories/:sessionId", (c) =>
     handleConversationRequest(c),
+  );
+
+  app.put("/api/projects/:encodedProjectName/sessions/:sessionId/title", (c) =>
+    handleSetSessionTitleRequest(c),
   );
 
   app.post("/api/abort/:requestId", (c) =>

@@ -42,7 +42,12 @@
     "msgCount_one": "{{count}} 条",
     "msgCount_other": "{{count}} 条",
     "ariaClose": "关闭会话面板",
-    "ariaLabel": "对话列表"
+    "ariaLabel": "对话列表",
+    "renameAria": "重命名会话",
+    "renamePlaceholder": "会话名称",
+    "renameSave": "保存",
+    "renameCancel": "取消",
+    "renameClear": "恢复默认名称"
   },
   "settings": {
     "title": "设置",

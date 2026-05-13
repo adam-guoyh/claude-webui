@@ -47,3 +47,9 @@ export const getConversationUrl = (
 
 export const getAuthStatusUrl = () => API_CONFIG.ENDPOINTS.AUTH_STATUS;
 export const getAuthCheckUrl = () => API_CONFIG.ENDPOINTS.AUTH_CHECK;
+
+export const getSessionTitleUrl = (
+  encodedProjectName: string,
+  sessionId: string,
+) =>
+  `${API_CONFIG.ENDPOINTS.PROJECTS}/${encodedProjectName}/sessions/${sessionId}/title`;

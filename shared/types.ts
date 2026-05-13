@@ -33,6 +33,13 @@ export interface ConversationSummary {
   lastTime: string;
   messageCount: number;
   lastMessagePreview: string;
+  /** User-defined display name set via the rename endpoint; absent if never set. */
+  customTitle?: string;
+}
+
+export interface SessionTitleRequest {
+  /** Trim/normalize on the server. Pass null or empty string to clear. */
+  title: string | null;
 }
 
 export interface HistoryListResponse {

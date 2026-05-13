@@ -42,7 +42,12 @@
     "msgCount_one": "{{count}} msg",
     "msgCount_other": "{{count}} msg",
     "ariaClose": "Close sessions panel",
-    "ariaLabel": "Conversation sessions"
+    "ariaLabel": "Conversation sessions",
+    "renameAria": "Rename session",
+    "renamePlaceholder": "Session name",
+    "renameSave": "Save",
+    "renameCancel": "Cancel",
+    "renameClear": "Reset to default name"
   },
   "settings": {
     "title": "Settings",
