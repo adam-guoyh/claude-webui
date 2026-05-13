@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { AllMessage, TimestampedSDKMessage } from "../types";
 import type { ConversationHistory } from "../../../shared/types";
 import { getConversationUrl } from "../config/api";
+import { authFetch } from "../utils/authFetch";
 import { useMessageConverter } from "./useMessageConverter";
 
 interface HistoryLoaderState {
@@ -59,7 +60,7 @@ export function useHistoryLoader(): HistoryLoaderResult {
           error: null,
         }));
 
-        const response = await fetch(
+        const response = await authFetch(
           getConversationUrl(encodedProjectName, sessionId),
         );
 

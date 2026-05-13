@@ -13,6 +13,7 @@ export interface ParsedArgs {
   port: number;
   host: string;
   claudePath?: string;
+  authToken?: string;
 }
 
 export function parseCliArgs(): ParsedArgs {
@@ -48,6 +49,10 @@ export function parseCliArgs(): ParsedArgs {
       "--claude-path <path>",
       "Path to claude executable (overrides automatic detection)",
     )
+    .option(
+      "--auth-token <token>",
+      "Shared bearer token required to access the API (also reads WEBUI_AUTH_TOKEN env var)",
+    )
     .option("-d, --debug", "Enable debug mode", false);
 
   // Parse arguments - Commander.js v14 handles this automatically
@@ -58,10 +63,15 @@ export function parseCliArgs(): ParsedArgs {
   const debugEnv = getEnv("DEBUG");
   const debugFromEnv = debugEnv?.toLowerCase() === "true" || debugEnv === "1";
 
+  // Auth token: CLI flag takes precedence, fall back to env var
+  const authTokenEnv = getEnv("WEBUI_AUTH_TOKEN");
+  const authToken = options.authToken || authTokenEnv || undefined;
+
   return {
     debug: options.debug || debugFromEnv,
     port: options.port,
     host: options.host,
     claudePath: options.claudePath,
+    authToken,
   };
 }

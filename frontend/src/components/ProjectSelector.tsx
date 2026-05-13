@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FolderIcon } from "@heroicons/react/24/outline";
 import type { ProjectsResponse, ProjectInfo } from "../types";
 import { getProjectsUrl } from "../config/api";
+import { authFetch } from "../utils/authFetch";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 
@@ -20,7 +21,7 @@ export function ProjectSelector() {
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch(getProjectsUrl());
+      const response = await authFetch(getProjectsUrl());
       if (!response.ok) {
         throw new Error(`Failed to load projects: ${response.statusText}`);
       }

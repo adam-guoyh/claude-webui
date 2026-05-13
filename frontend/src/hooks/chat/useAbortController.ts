@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 import { getAbortUrl } from "../../config/api";
+import { authFetch } from "../../utils/authFetch";
 
 export function useAbortController() {
   // Helper function to perform abort request
   const performAbortRequest = useCallback(async (requestId: string) => {
-    await fetch(getAbortUrl(requestId), {
+    await authFetch(getAbortUrl(requestId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });

@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { ChatPage } from "./components/ChatPage";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import { AuthProvider } from "./contexts/AuthContext";
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -19,13 +20,17 @@ describe("App Routing", () => {
   });
 
   it("renders project selection page at root path", async () => {
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <Routes>
-          <Route path="/" element={<ProjectSelector />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    await act(async () => {
+      render(
+        <AuthProvider>
+          <MemoryRouter initialEntries={["/"]}>
+            <Routes>
+              <Route path="/" element={<ProjectSelector />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>,
+      );
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Select a Project")).toBeInTheDocument();
@@ -36,11 +41,13 @@ describe("App Routing", () => {
     await act(async () => {
       render(
         <SettingsProvider>
-          <MemoryRouter initialEntries={["/projects/test-path"]}>
-            <Routes>
-              <Route path="/projects/*" element={<ChatPage />} />
-            </Routes>
-          </MemoryRouter>
+          <AuthProvider>
+            <MemoryRouter initialEntries={["/projects/test-path"]}>
+              <Routes>
+                <Route path="/projects/*" element={<ChatPage />} />
+              </Routes>
+            </MemoryRouter>
+          </AuthProvider>
         </SettingsProvider>,
       );
     });

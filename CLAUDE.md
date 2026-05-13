@@ -34,11 +34,22 @@ lefthook run pre-commit
 
 **API Endpoints**:
 
+- `GET /api/auth/status` - Public; reports `{ authRequired: boolean }`
+- `GET /api/auth/check` - Gated; succeeds (200) when the supplied bearer token is valid
 - `GET /api/projects` - List available project directories
 - `POST /api/chat` - Chat messages with streaming responses (`{ message, sessionId?, requestId, allowedTools?, workingDirectory? }`)
 - `POST /api/abort/:requestId` - Abort ongoing requests
 - `GET /api/projects/:encodedProjectName/histories` - Conversation histories
 - `GET /api/projects/:encodedProjectName/histories/:sessionId` - Specific conversation history
+
+**Authentication**: Optional shared bearer token configured via `--auth-token`
+or `WEBUI_AUTH_TOKEN`. When unset the server is open (preserving the original
+local-only behavior). When set, every `/api/*` request (except
+`/api/auth/status`) requires `Authorization: Bearer <token>`; the frontend
+stores the token in `localStorage` after the user signs in on `/login` and
+routes all requests through `authFetch` (`frontend/src/utils/authFetch.ts`).
+Auth state lives in `AuthContext` (`frontend/src/contexts/AuthContext.tsx`);
+401 responses globally trigger logout via the registered handler.
 
 ### Frontend (React)
 

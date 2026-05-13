@@ -2,7 +2,10 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { ChatPage } from "./components/ChatPage";
+import { Login } from "./components/Login";
+import { RequireAuth } from "./components/RequireAuth";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import { isDevelopment } from "./utils/environment";
 
 // Lazy load DemoPage only in development
@@ -17,22 +20,39 @@ const DemoPage = isDevelopment()
 function App() {
   return (
     <SettingsProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<ProjectSelector />} />
-          <Route path="/projects/*" element={<ChatPage />} />
-          {DemoPage && (
+      <AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
             <Route
-              path="/demo"
+              path="/"
               element={
-                <Suspense fallback={<div>Loading demo...</div>}>
-                  <DemoPage />
-                </Suspense>
+                <RequireAuth>
+                  <ProjectSelector />
+                </RequireAuth>
               }
             />
-          )}
-        </Routes>
-      </Router>
+            <Route
+              path="/projects/*"
+              element={
+                <RequireAuth>
+                  <ChatPage />
+                </RequireAuth>
+              }
+            />
+            {DemoPage && (
+              <Route
+                path="/demo"
+                element={
+                  <Suspense fallback={<div>Loading demo...</div>}>
+                    <DemoPage />
+                  </Suspense>
+                }
+              />
+            )}
+          </Routes>
+        </Router>
+      </AuthProvider>
     </SettingsProvider>
   );
 }

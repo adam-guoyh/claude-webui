@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { GeneralSettings } from "./settings/GeneralSettings";
+import { useAuth } from "../hooks/useAuth";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const { status, logout } = useAuth();
   // Handle ESC key to close modal
   useEffect(() => {
     const handleEscKey = (event: KeyboardEvent) => {
@@ -58,8 +60,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* Content */}
         <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-          <div className="p-6">
+          <div className="p-6 space-y-6">
             <GeneralSettings />
+            {status === "authenticated" && (
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => {
+                    logout();
+                    onClose();
+                  }}
+                  className="text-sm text-red-600 dark:text-red-400 hover:underline"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

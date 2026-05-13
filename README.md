@@ -144,19 +144,21 @@ cd frontend && npm run dev
 
 The backend server supports the following command-line options:
 
-| Option                 | Description                                               | Default     |
-| ---------------------- | --------------------------------------------------------- | ----------- |
-| `-p, --port <port>`    | Port to listen on                                         | 8080        |
-| `--host <host>`        | Host address to bind to (use 0.0.0.0 for all interfaces)  | 127.0.0.1   |
-| `--claude-path <path>` | Path to claude executable (overrides automatic detection) | Auto-detect |
-| `-d, --debug`          | Enable debug mode                                         | false       |
-| `-h, --help`           | Show help message                                         | -           |
-| `-v, --version`        | Show version                                              | -           |
+| Option                  | Description                                               | Default     |
+| ----------------------- | --------------------------------------------------------- | ----------- |
+| `-p, --port <port>`     | Port to listen on                                         | 8080        |
+| `--host <host>`         | Host address to bind to (use 0.0.0.0 for all interfaces)  | 127.0.0.1   |
+| `--claude-path <path>`  | Path to claude executable (overrides automatic detection) | Auto-detect |
+| `--auth-token <token>`  | Require this bearer token for all `/api/*` requests       | _disabled_  |
+| `-d, --debug`           | Enable debug mode                                         | false       |
+| `-h, --help`            | Show help message                                         | -           |
+| `-v, --version`         | Show version                                              | -           |
 
 ### Environment Variables
 
 - `PORT` - Same as `--port`
 - `DEBUG` - Same as `--debug`
+- `WEBUI_AUTH_TOKEN` - Same as `--auth-token` (CLI flag wins if both are set)
 
 ### Examples
 
@@ -178,7 +180,22 @@ claude-code-webui --claude-path /path/to/claude
 
 # Using environment variables
 PORT=9000 DEBUG=true claude-code-webui
+
+# Require a bearer token for the web UI (recommended for LAN exposure)
+claude-code-webui --auth-token "$(openssl rand -hex 32)"
+# Or via env var:
+WEBUI_AUTH_TOKEN="$(openssl rand -hex 32)" claude-code-webui
 ```
+
+### Authentication
+
+By default the server has **no authentication** — it binds to `127.0.0.1` and
+trusts every caller. When exposing the UI on a LAN (or anywhere reachable from
+another machine), pass `--auth-token <token>` (or set `WEBUI_AUTH_TOKEN`). Every
+`/api/*` request must then include `Authorization: Bearer <token>`; the web UI
+will redirect users to a login page on first load and store the token in
+`localStorage` after a successful sign-in. Use `openssl rand -hex 32` or any
+high-entropy generator — short or guessable tokens defeat the point.
 
 ---
 

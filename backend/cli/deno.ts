@@ -35,7 +35,14 @@ async function main(runtime: DenoRuntime) {
     debugMode: args.debug,
     staticPath,
     cliPath: cliPath,
+    authToken: args.authToken,
   });
+
+  if (args.authToken) {
+    logger.cli.info("🔐 Auth enabled (bearer token required for /api/*)");
+  } else {
+    logger.cli.info("🔓 Auth disabled (no token configured)");
+  }
 
   // Start server (only show this message when everything is ready)
   logger.cli.info(`🚀 Server starting on ${args.host}:${args.port}`);

@@ -12,6 +12,7 @@ import {
   type ConfigContext,
   createConfigMiddleware,
 } from "./middleware/config.ts";
+import { createAuthMiddleware } from "./middleware/auth.ts";
 import { handleProjectsRequest } from "./handlers/projects.ts";
 import { handleHistoriesRequest } from "./handlers/histories.ts";
 import { handleConversationRequest } from "./handlers/conversations.ts";
@@ -24,6 +25,7 @@ export interface AppConfig {
   debugMode: boolean;
   staticPath: string;
   cliPath: string; // Actual CLI script path detected by validateClaudeCli
+  authToken?: string;
 }
 
 export function createApp(
@@ -54,6 +56,22 @@ export function createApp(
       cliPath: config.cliPath,
     }),
   );
+
+  // Auth middleware - gates /api/* (no-op when no token configured).
+  // GET /api/auth/status is exempt so the frontend can discover whether auth
+  // is required without holding a token yet.
+  app.use("/api/*", createAuthMiddleware(config.authToken));
+
+  // Public auth-status endpoint: tells the frontend whether the server
+  // requires a bearer token. Never reveals the token itself.
+  app.get("/api/auth/status", (c) =>
+    c.json({ authRequired: Boolean(config.authToken) }),
+  );
+
+  // Gated lightweight check: succeeds (200) only when the bearer token is
+  // valid (or auth is disabled). Used by the login flow to verify a token
+  // before transitioning into the app.
+  app.get("/api/auth/check", (c) => c.json({ ok: true }));
 
   // API routes
   app.get("/api/projects", (c) => handleProjectsRequest(c));

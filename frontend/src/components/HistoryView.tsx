@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ConversationSummary } from "../../../shared/types";
 import { getHistoriesUrl } from "../config/api";
+import { authFetch } from "../utils/authFetch";
 
 interface HistoryViewProps {
   workingDirectory: string;
@@ -24,7 +25,7 @@ export function HistoryView({ encodedName }: HistoryViewProps) {
 
       try {
         setLoading(true);
-        const response = await fetch(getHistoriesUrl(encodedName));
+        const response = await authFetch(getHistoriesUrl(encodedName));
 
         if (!response.ok) {
           throw new Error(

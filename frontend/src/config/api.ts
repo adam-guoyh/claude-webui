@@ -6,6 +6,8 @@ export const API_CONFIG = {
     PROJECTS: "/api/projects",
     HISTORIES: "/api/projects",
     CONVERSATIONS: "/api/projects",
+    AUTH_STATUS: "/api/auth/status",
+    AUTH_CHECK: "/api/auth/check",
   },
 } as const;
 
@@ -42,3 +44,6 @@ export const getConversationUrl = (
 ) => {
   return `${API_CONFIG.ENDPOINTS.CONVERSATIONS}/${encodedProjectName}/histories/${sessionId}`;
 };
+
+export const getAuthStatusUrl = () => API_CONFIG.ENDPOINTS.AUTH_STATUS;
+export const getAuthCheckUrl = () => API_CONFIG.ENDPOINTS.AUTH_CHECK;

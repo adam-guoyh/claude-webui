@@ -20,6 +20,7 @@ import { ChatInput } from "./chat/ChatInput";
 import { ChatMessages } from "./chat/ChatMessages";
 import { HistoryView } from "./HistoryView";
 import { getChatUrl, getProjectsUrl } from "../config/api";
+import { authFetch } from "../utils/authFetch";
 import { KEYBOARD_SHORTCUTS } from "../utils/constants";
 import { normalizeWindowsPath } from "../utils/pathUtils";
 import type { StreamingContext } from "../hooks/streaming/useMessageProcessor";
@@ -167,7 +168,7 @@ export function ChatPage() {
       startRequest();
 
       try {
-        const response = await fetch(getChatUrl(), {
+        const response = await authFetch(getChatUrl(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -388,7 +389,7 @@ export function ChatPage() {
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        const response = await fetch(getProjectsUrl());
+        const response = await authFetch(getProjectsUrl());
         if (response.ok) {
           const data = await response.json();
           setProjects(data.projects || []);
