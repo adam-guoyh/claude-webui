@@ -39,29 +39,55 @@ async function* executeClaudeCommand(
     abortController = new AbortController();
     requestAbortControllers.set(requestId, abortController);
 
-    for await (const sdkMessage of query({
-      prompt: processedMessage,
-      options: {
-        abortController,
-        executable: "node" as const,
-        executableArgs: [],
-        pathToClaudeCodeExecutable: cliPath,
-        ...(sessionId ? { resume: sessionId } : {}),
-        ...(allowedTools ? { allowedTools } : {}),
-        ...(workingDirectory ? { cwd: workingDirectory } : {}),
-        ...(permissionMode ? { permissionMode } : {}),
-      },
-    })) {
-      // Debug logging of raw SDK messages with detailed content
-      logger.chat.debug("Claude SDK Message: {sdkMessage}", { sdkMessage });
+    // Pipe Claude CLI stderr into our logger so a failing child process
+    // shows the real diagnostic instead of only "exited with code 1".
+    // Stash chunks so we can include them in the user-facing error too.
+    const stderrChunks: string[] = [];
+    const handleStderr = (data: string) => {
+      stderrChunks.push(data);
+      logger.chat.debug("Claude CLI stderr: {data}", { data });
+    };
 
-      yield {
-        type: "claude_json",
-        data: sdkMessage,
-      };
+    // The SDK supports either spawning a Node script (defaults via the
+    // `executable: "node"` knob) or running a native binary directly when the
+    // configured path has no JS extension (.js/.mjs/.tsx/.ts/.jsx). The
+    // `executable` option is ignored in the native case, so it is safe to
+    // leave set for both.
+    try {
+      for await (const sdkMessage of query({
+        prompt: processedMessage,
+        options: {
+          abortController,
+          executable: "node" as const,
+          executableArgs: [],
+          pathToClaudeCodeExecutable: cliPath,
+          stderr: handleStderr,
+          ...(sessionId ? { resume: sessionId } : {}),
+          ...(allowedTools ? { allowedTools } : {}),
+          ...(workingDirectory ? { cwd: workingDirectory } : {}),
+          ...(permissionMode ? { permissionMode } : {}),
+        },
+      })) {
+        // Debug logging of raw SDK messages with detailed content
+        logger.chat.debug("Claude SDK Message: {sdkMessage}", { sdkMessage });
+
+        yield {
+          type: "claude_json",
+          data: sdkMessage,
+        };
+      }
+
+      yield { type: "done" };
+    } catch (innerError) {
+      // Re-throw with captured stderr appended so the outer handler can pass
+      // a useful message back to the client.
+      const stderrTail = stderrChunks.join("").trim().slice(-2000);
+      const baseMsg =
+        innerError instanceof Error
+          ? innerError.message
+          : String(innerError);
+      throw new Error(stderrTail ? `${baseMsg}\n--- stderr ---\n${stderrTail}` : baseMsg);
     }
-
-    yield { type: "done" };
   } catch (error) {
     // Check if error is due to abort
     // TODO: Re-enable when AbortError is properly exported from Claude SDK
