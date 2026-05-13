@@ -23,8 +23,11 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "dayjs": "^1.11.13",
+    "i18next": "^24.2.3",
+    "i18next-browser-languagedetector": "^8.2.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.1",
+    "react-i18next": "^15.7.4",
     "react-router-dom": "^7.6.2"
   },
   "devDependencies": {

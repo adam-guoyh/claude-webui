@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Bars3Icon } from "@heroicons/react/24/outline";
+import { useTranslation } from "react-i18next";
 import type {
   ChatRequest,
   ChatMessage,
@@ -25,6 +26,7 @@ import { normalizeWindowsPath } from "../utils/pathUtils";
 import type { StreamingContext } from "../hooks/streaming/useMessageProcessor";
 
 export function ChatPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -220,7 +222,7 @@ export function ChatPage() {
         addMessage({
           type: "chat",
           role: "assistant",
-          content: "Error: Failed to get response",
+          content: t("chat.fetchFailed"),
           timestamp: Date.now(),
         });
       } finally {
@@ -252,6 +254,7 @@ export function ChatPage() {
       processStreamLine,
       handlePermissionError,
       createAbortHandler,
+      t,
     ],
   );
 
@@ -427,7 +430,7 @@ export function ChatPage() {
                 <button
                   onClick={() => setIsMobileSidebarOpen(true)}
                   className="md:hidden p-2 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 backdrop-blur-sm shadow-sm hover:shadow-md"
-                  aria-label="Open sessions"
+                  aria-label={t("chat.ariaOpenSessions")}
                 >
                   <Bars3Icon className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                 </button>
@@ -436,9 +439,9 @@ export function ChatPage() {
                     <button
                       onClick={handleBackToProjects}
                       className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded-md px-1 -mx-1"
-                      aria-label="Back to project selection"
+                      aria-label={t("chat.ariaBackToProjects")}
                     >
-                      Claude Code Web UI
+                      {t("app.title")}
                     </button>
                   </nav>
                   {workingDirectory && (
@@ -466,7 +469,7 @@ export function ChatPage() {
                 <div className="text-center">
                   <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin mx-auto mb-4"></div>
                   <p className="text-slate-600 dark:text-slate-400">
-                    Loading conversation history...
+                    {t("chat.loadingHistory")}
                   </p>
                 </div>
               </div>
@@ -489,7 +492,7 @@ export function ChatPage() {
                     </svg>
                   </div>
                   <h2 className="text-slate-800 dark:text-slate-100 text-xl font-semibold mb-2">
-                    Error Loading Conversation
+                    {t("chat.errorTitle")}
                   </h2>
                   <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
                     {historyError}
@@ -498,7 +501,7 @@ export function ChatPage() {
                     onClick={handleNewChat}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    Start New Conversation
+                    {t("chat.startNew")}
                   </button>
                 </div>
               </div>

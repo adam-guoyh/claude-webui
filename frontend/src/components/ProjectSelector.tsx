@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FolderIcon } from "@heroicons/react/24/outline";
+import { useTranslation } from "react-i18next";
 import type { ProjectsResponse, ProjectInfo } from "../types";
 import { getProjectsUrl } from "../config/api";
 import { authFetch } from "../utils/authFetch";
@@ -8,6 +9,7 @@ import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 
 export function ProjectSelector() {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,12 +25,12 @@ export function ProjectSelector() {
       setLoading(true);
       const response = await authFetch(getProjectsUrl());
       if (!response.ok) {
-        throw new Error(`Failed to load projects: ${response.statusText}`);
+        throw new Error(`${response.status} ${response.statusText}`);
       }
       const data: ProjectsResponse = await response.json();
       setProjects(data.projects);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load projects");
+      setError(err instanceof Error ? err.message : t("projects.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export function ProjectSelector() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-slate-600 dark:text-slate-400">
-          Loading projects...
+          {t("projects.loading")}
         </div>
       </div>
     );
@@ -62,7 +64,9 @@ export function ProjectSelector() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-600 dark:text-red-400">Error: {error}</div>
+        <div className="text-red-600 dark:text-red-400">
+          {t("projects.errorPrefix", { message: error })}
+        </div>
       </div>
     );
   }
@@ -73,7 +77,7 @@ export function ProjectSelector() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-slate-800 dark:text-slate-100 text-3xl font-bold tracking-tight">
-            Select a Project
+            {t("projects.selectTitle")}
           </h1>
           <SettingsButton onClick={handleSettingsClick} />
         </div>
@@ -82,7 +86,7 @@ export function ProjectSelector() {
           {projects.length > 0 && (
             <>
               <h2 className="text-slate-700 dark:text-slate-300 text-lg font-medium mb-4">
-                Recent Projects
+                {t("projects.recent")}
               </h2>
               {projects.map((project) => (
                 <button

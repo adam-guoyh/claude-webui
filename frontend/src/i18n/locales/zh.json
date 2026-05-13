@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "Claude Code Web UI"
+  },
+  "common": {
+    "loading": "加载中…",
+    "error": "错误",
+    "close": "关闭",
+    "retry": "重试"
+  },
+  "auth": {
+    "subtitle": "请输入服务器配置的访问令牌。",
+    "tokenLabel": "访问令牌",
+    "tokenPlaceholder": "在此粘贴 token",
+    "signIn": "登录",
+    "verifying": "验证中…",
+    "errorEmpty": "令牌不能为空",
+    "errorInvalid": "令牌无效",
+    "errorOther": "登录失败({{status}})",
+    "signOut": "退出登录"
+  },
+  "projects": {
+    "selectTitle": "选择项目",
+    "recent": "最近项目",
+    "loading": "加载项目中…",
+    "loadFailed": "项目加载失败",
+    "errorPrefix": "错误:{{message}}"
+  },
+  "chat": {
+    "loadingHistory": "正在加载对话历史…",
+    "errorTitle": "加载对话失败",
+    "startNew": "开始新对话",
+    "fetchFailed": "错误:无法获取响应",
+    "ariaBackToProjects": "返回项目选择",
+    "ariaOpenSessions": "打开会话列表",
+    "sessionLabel": "会话"
+  },
+  "sidebar": {
+    "newChat": "新建对话",
+    "loading": "加载会话中…",
+    "empty": "暂无对话",
+    "msgCount_one": "{{count}} 条",
+    "msgCount_other": "{{count}} 条",
+    "ariaClose": "关闭会话面板",
+    "ariaLabel": "对话列表"
+  },
+  "settings": {
+    "title": "设置",
+    "ariaOpen": "设置",
+    "ariaClose": "关闭设置",
+    "general": "通用设置",
+    "theme": {
+      "label": "主题",
+      "light": "浅色模式",
+      "dark": "深色模式",
+      "switchTo": "点击切换到{{mode}}",
+      "modeLight": "浅色模式",
+      "modeDark": "深色模式"
+    },
+    "enterBehavior": {
+      "label": "回车键行为",
+      "send": "回车发送",
+      "newline": "回车换行",
+      "descSend": "回车发送消息,Shift+回车换行",
+      "descNewline": "回车换行,Shift+回车发送消息",
+      "hint": "控制输入框中回车键的行为。"
+    },
+    "language": {
+      "label": "语言",
+      "hint": "界面显示语言。"
+    }
+  }
+}

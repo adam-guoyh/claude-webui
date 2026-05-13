@@ -6,7 +6,11 @@ import {
   setAuthToken,
   setUnauthorizedHandler,
 } from "../utils/authFetch";
-import { AuthContext, type AuthStatus } from "./AuthContextTypes";
+import {
+  AuthContext,
+  type AuthStatus,
+  type LoginError,
+} from "./AuthContextTypes";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
@@ -67,22 +71,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const login = useCallback(async (token: string): Promise<string | null> => {
-    const trimmed = token.trim();
-    if (!trimmed) return "Token cannot be empty";
+  const login = useCallback(
+    async (token: string): Promise<LoginError | null> => {
+      const trimmed = token.trim();
+      if (!trimmed) return { key: "auth.errorEmpty" };
 
-    // Tentatively set the token so authFetch picks it up for the check call.
-    setAuthToken(trimmed);
-    const res = await authFetch(getAuthCheckUrl());
-    if (res.ok) {
-      setStatus("authenticated");
-      return null;
-    }
-    setAuthToken(null);
-    return res.status === 401
-      ? "Invalid token"
-      : `Login failed (${res.status})`;
-  }, []);
+      // Tentatively set the token so authFetch picks it up for the check call.
+      setAuthToken(trimmed);
+      const res = await authFetch(getAuthCheckUrl());
+      if (res.ok) {
+        setStatus("authenticated");
+        return null;
+      }
+      setAuthToken(null);
+      return res.status === 401
+        ? { key: "auth.errorInvalid" }
+        : { key: "auth.errorOther", params: { status: res.status } };
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setAuthToken(null);

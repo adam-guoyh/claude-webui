@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "Claude Code Web UI"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Error",
+    "close": "Close",
+    "retry": "Retry"
+  },
+  "auth": {
+    "subtitle": "Enter the bearer token configured on the server.",
+    "tokenLabel": "Auth token",
+    "tokenPlaceholder": "paste token here",
+    "signIn": "Sign in",
+    "verifying": "Verifying…",
+    "errorEmpty": "Token cannot be empty",
+    "errorInvalid": "Invalid token",
+    "errorOther": "Login failed ({{status}})",
+    "signOut": "Sign out"
+  },
+  "projects": {
+    "selectTitle": "Select a Project",
+    "recent": "Recent Projects",
+    "loading": "Loading projects…",
+    "loadFailed": "Failed to load projects",
+    "errorPrefix": "Error: {{message}}"
+  },
+  "chat": {
+    "loadingHistory": "Loading conversation history…",
+    "errorTitle": "Error Loading Conversation",
+    "startNew": "Start New Conversation",
+    "fetchFailed": "Error: Failed to get response",
+    "ariaBackToProjects": "Back to project selection",
+    "ariaOpenSessions": "Open sessions",
+    "sessionLabel": "Session"
+  },
+  "sidebar": {
+    "newChat": "New chat",
+    "loading": "Loading sessions…",
+    "empty": "No conversations yet",
+    "msgCount_one": "{{count}} msg",
+    "msgCount_other": "{{count}} msg",
+    "ariaClose": "Close sessions panel",
+    "ariaLabel": "Conversation sessions"
+  },
+  "settings": {
+    "title": "Settings",
+    "ariaOpen": "Settings",
+    "ariaClose": "Close settings",
+    "general": "General Settings",
+    "theme": {
+      "label": "Theme",
+      "light": "Light Mode",
+      "dark": "Dark Mode",
+      "switchTo": "Click to switch to {{mode}} mode",
+      "modeLight": "light",
+      "modeDark": "dark"
+    },
+    "enterBehavior": {
+      "label": "Enter Key Behavior",
+      "send": "Enter to Send",
+      "newline": "Enter for Newline",
+      "descSend": "Enter sends message, Shift+Enter for newline",
+      "descNewline": "Enter adds newline, Shift+Enter sends message",
+      "hint": "Controls how the Enter key behaves when typing messages in the chat input."
+    },
+    "language": {
+      "label": "Language",
+      "hint": "Interface language."
+    }
+  }
+}

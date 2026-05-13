@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
+import type { LoginError } from "../contexts/AuthContextTypes";
 
 export function Login() {
+  const { t } = useTranslation();
   const { status, login } = useAuth();
   const [token, setToken] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoginError | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (status === "loading") {
@@ -24,9 +27,9 @@ export function Login() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const msg = await login(token);
+    const result = await login(token);
     setSubmitting(false);
-    if (msg) setError(msg);
+    if (result) setError(result);
   };
 
   return (
@@ -37,16 +40,16 @@ export function Login() {
       >
         <div>
           <h1 className="text-slate-800 dark:text-slate-100 text-2xl font-bold tracking-tight">
-            Claude Code Web UI
+            {t("app.title")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Enter the bearer token configured on the server.
+            {t("auth.subtitle")}
           </p>
         </div>
 
         <label className="block">
           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            Auth token
+            {t("auth.tokenLabel")}
           </span>
           <input
             type="password"
@@ -55,7 +58,7 @@ export function Login() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="paste token here"
+            placeholder={t("auth.tokenPlaceholder")}
           />
         </label>
 
@@ -64,7 +67,7 @@ export function Login() {
             role="alert"
             className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md px-3 py-2"
           >
-            {error}
+            {"params" in error ? t(error.key, error.params) : t(error.key)}
           </div>
         )}
 
@@ -73,7 +76,7 @@ export function Login() {
           disabled={submitting}
           className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          {submitting ? "Verifying…" : "Sign in"}
+          {submitting ? t("auth.verifying") : t("auth.signIn")}
         </button>
       </form>
     </div>
