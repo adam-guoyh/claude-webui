@@ -26,9 +26,17 @@
   "projects": {
     "selectTitle": "选择项目",
     "recent": "最近项目",
+    "newProject": "新建项目",
     "loading": "加载项目中…",
     "loadFailed": "项目加载失败",
     "errorPrefix": "错误:{{message}}"
+  },
+  "directoryBrowser": {
+    "title": "浏览目录",
+    "home": "主目录",
+    "empty": "此处没有目录",
+    "showHidden": "显示隐藏项",
+    "select": "选择此目录"
   },
   "chat": {
     "loadingHistory": "正在加载对话历史…",
@@ -76,7 +84,8 @@
     "adding": "添加中…",
     "newPlaceholder": "/绝对/路径",
     "confirmDelete": "确认删除项目 {{path}}?其下所有会话都会被清除。",
-    "deleteAria": "删除项目 {{path}}"
+    "deleteAria": "删除项目 {{path}}",
+    "browseAria": "浏览选择目录"
   },
   "adminUsers": {
     "title": "用户管理",

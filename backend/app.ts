@@ -35,6 +35,7 @@ import {
   handleDeleteProjectRequest,
   handleProjectsRequest,
 } from "./handlers/projects.ts";
+import { handleBrowseRequest } from "./handlers/browse.ts";
 import {
   handleDeleteSessionRequest,
   handleHistoriesRequest,
@@ -268,6 +269,7 @@ export function createApp(
   app.delete("/api/projects/:encodedProjectName", (c) =>
     handleDeleteProjectRequest(c),
   );
+  app.get("/api/fs/browse", (c) => handleBrowseRequest(c));
 
   app.get("/api/projects/:encodedProjectName/histories", (c) =>
     handleHistoriesRequest(c),

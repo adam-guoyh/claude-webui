@@ -1,27 +1,35 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FolderIcon } from "@heroicons/react/24/outline";
+import {
+  FolderIcon,
+  FolderPlusIcon,
+  MagnifyingGlassIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import type { ProjectsResponse, ProjectInfo } from "../types";
-import { getProjectsUrl } from "../config/api";
+import { getApiUrl, getProjectsUrl } from "../config/api";
 import { authFetch } from "../utils/authFetch";
+import { useAuth } from "../hooks/useAuth";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 import { UserMenu } from "./UserMenu";
+import { DirectoryBrowser } from "./DirectoryBrowser";
 
 export function ProjectSelector() {
   const { t } = useTranslation();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [newPath, setNewPath] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     try {
       setLoading(true);
       const response = await authFetch(getProjectsUrl());
@@ -35,7 +43,11 @@ export function ProjectSelector() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
 
   const handleProjectSelect = (projectPath: string) => {
     const normalizedPath = projectPath.startsWith("/")
@@ -44,12 +56,53 @@ export function ProjectSelector() {
     navigate(`/projects${normalizedPath}`);
   };
 
-  const handleSettingsClick = () => {
-    setIsSettingsOpen(true);
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newPath.trim();
+    if (!trimmed) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await authFetch(getApiUrl("/api/projects"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: trimmed }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const body = (await res.json()) as ProjectInfo;
+      setNewPath("");
+      navigate(`/projects${body.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create project");
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleSettingsClose = () => {
-    setIsSettingsOpen(false);
+  const handleDelete = async (project: ProjectInfo) => {
+    if (!confirm(t("projectSwitcher.confirmDelete", { path: project.path }))) {
+      return;
+    }
+    try {
+      const res = await authFetch(
+        getApiUrl(`/api/projects/${project.encodedName}`),
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      await loadProjects();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete project");
+    }
   };
 
   if (loading) {
@@ -57,16 +110,6 @@ export function ProjectSelector() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-slate-600 dark:text-slate-400">
           {t("projects.loading")}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-600 dark:text-red-400">
-          {t("projects.errorPrefix", { message: error })}
         </div>
       </div>
     );
@@ -82,34 +125,111 @@ export function ProjectSelector() {
           </h1>
           <div className="flex items-center gap-2">
             <UserMenu />
-            <SettingsButton onClick={handleSettingsClick} />
+            <SettingsButton onClick={() => setIsSettingsOpen(true)} />
           </div>
         </div>
 
+        {error && (
+          <div className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        {/* New project */}
+        <form
+          onSubmit={handleCreate}
+          className="mb-6 p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"
+        >
+          <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+            <FolderPlusIcon className="w-4 h-4" />
+            {t("projects.newProject")}
+          </h2>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newPath}
+              onChange={(e) => setNewPath(e.target.value)}
+              placeholder={t("projectSwitcher.newPlaceholder")}
+              className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => setBrowserOpen(true)}
+              className="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-400"
+              aria-label={t("projectSwitcher.browseAria")}
+              title={t("projectSwitcher.browseAria")}
+            >
+              <MagnifyingGlassIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="submit"
+              disabled={creating || !newPath.trim()}
+              className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {creating
+                ? t("projectSwitcher.adding")
+                : t("projectSwitcher.add")}
+            </button>
+          </div>
+        </form>
+
         <div className="space-y-3">
-          {projects.length > 0 && (
+          {projects.length > 0 ? (
             <>
               <h2 className="text-slate-700 dark:text-slate-300 text-lg font-medium mb-4">
                 {t("projects.recent")}
               </h2>
               {projects.map((project) => (
-                <button
+                <div
                   key={project.path}
-                  onClick={() => handleProjectSelect(project.path)}
-                  className="w-full flex items-center gap-3 p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors text-left"
+                  className="group flex items-center gap-3 p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors"
                 >
-                  <FolderIcon className="h-5 w-5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                  <span className="text-slate-800 dark:text-slate-200 font-mono text-sm">
-                    {project.path}
-                  </span>
-                </button>
+                  <button
+                    onClick={() => handleProjectSelect(project.path)}
+                    className="flex-1 flex items-center gap-3 text-left min-w-0"
+                  >
+                    <FolderIcon className="h-5 w-5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                    <span className="text-slate-800 dark:text-slate-200 font-mono text-sm truncate">
+                      {project.path}
+                    </span>
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => void handleDelete(project)}
+                      className="opacity-0 group-hover:opacity-100 p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 transition-opacity"
+                      aria-label={t("projectSwitcher.deleteAria", {
+                        path: project.path,
+                      })}
+                      title={t("projectSwitcher.deleteAria", {
+                        path: project.path,
+                      })}
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               ))}
             </>
+          ) : (
+            <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+              {t("projectSwitcher.empty")}
+            </div>
           )}
         </div>
 
-        {/* Settings Modal */}
-        <SettingsModal isOpen={isSettingsOpen} onClose={handleSettingsClose} />
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+        <DirectoryBrowser
+          open={browserOpen}
+          initialPath={newPath.trim() || null}
+          onResolve={(picked) => {
+            setBrowserOpen(false);
+            if (picked) setNewPath(picked);
+          }}
+        />
       </div>
     </div>
   );

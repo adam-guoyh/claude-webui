@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   FolderIcon,
   FolderPlusIcon,
+  MagnifyingGlassIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
@@ -11,6 +12,7 @@ import type { ProjectInfo } from "../../types";
 import { getApiUrl, getProjectsUrl } from "../../config/api";
 import { authFetch } from "../../utils/authFetch";
 import { useAuth } from "../../hooks/useAuth";
+import { DirectoryBrowser } from "../DirectoryBrowser";
 
 interface ProjectSwitcherProps {
   /** Path of the currently active project, e.g. "/Users/me/foo". */
@@ -37,6 +39,7 @@ export function ProjectSwitcher({ currentPath }: ProjectSwitcherProps) {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newPath, setNewPath] = useState("");
+  const [browserOpen, setBrowserOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
@@ -222,6 +225,15 @@ export function ProjectSwitcher({ currentPath }: ProjectSwitcherProps) {
               autoComplete="off"
             />
             <button
+              type="button"
+              onClick={() => setBrowserOpen(true)}
+              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-400"
+              aria-label={t("projectSwitcher.browseAria")}
+              title={t("projectSwitcher.browseAria")}
+            >
+              <MagnifyingGlassIcon className="w-4 h-4" />
+            </button>
+            <button
               type="submit"
               disabled={creating || !newPath.trim()}
               className="px-2 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -239,6 +251,15 @@ export function ProjectSwitcher({ currentPath }: ProjectSwitcherProps) {
           )}
         </div>
       )}
+
+      <DirectoryBrowser
+        open={browserOpen}
+        initialPath={newPath.trim() || currentPath || null}
+        onResolve={(picked) => {
+          setBrowserOpen(false);
+          if (picked) setNewPath(picked);
+        }}
+      />
     </div>
   );
 }

@@ -26,9 +26,17 @@
   "projects": {
     "selectTitle": "Select a Project",
     "recent": "Recent Projects",
+    "newProject": "New project",
     "loading": "Loading projects…",
     "loadFailed": "Failed to load projects",
     "errorPrefix": "Error: {{message}}"
+  },
+  "directoryBrowser": {
+    "title": "Browse for a directory",
+    "home": "Home",
+    "empty": "No directories here",
+    "showHidden": "Show hidden",
+    "select": "Select this directory"
   },
   "chat": {
     "loadingHistory": "Loading conversation history…",
@@ -76,7 +84,8 @@
     "adding": "Adding…",
     "newPlaceholder": "/absolute/path",
     "confirmDelete": "Delete project {{path}}? This removes all of its sessions.",
-    "deleteAria": "Delete project {{path}}"
+    "deleteAria": "Delete project {{path}}",
+    "browseAria": "Browse for a directory"
   },
   "adminUsers": {
     "title": "User Management",
