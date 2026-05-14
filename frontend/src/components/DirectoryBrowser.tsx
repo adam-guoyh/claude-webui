@@ -54,7 +54,10 @@ export function DirectoryBrowser({
       setLoading(true);
       setError(null);
       try {
-        const url = new URL(getApiUrl("/api/fs/browse"), window.location.origin);
+        const url = new URL(
+          getApiUrl("/api/fs/browse"),
+          window.location.origin,
+        );
         if (target) url.searchParams.set("path", target);
         if (showHidden) url.searchParams.set("showHidden", "1");
         const res = await authFetch(url.pathname + url.search);
@@ -175,7 +178,9 @@ export function DirectoryBrowser({
             entries.map((e) => (
               <button
                 key={e.name}
-                onClick={() => void load(path === "/" ? `/${e.name}` : `${path}/${e.name}`)}
+                onClick={() =>
+                  void load(path === "/" ? `/${e.name}` : `${path}/${e.name}`)
+                }
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/40 text-slate-700 dark:text-slate-200"
               >
                 {e.isDirectory ? (

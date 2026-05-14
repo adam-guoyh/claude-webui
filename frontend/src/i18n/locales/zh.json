@@ -55,6 +55,7 @@
     "msgCount_other": "{{count}} 条",
     "ariaClose": "关闭会话面板",
     "ariaLabel": "对话列表",
+    "refreshAria": "刷新会话列表",
     "groupYours": "我的会话",
     "renameAria": "重命名会话",
     "renamePlaceholder": "会话名称",

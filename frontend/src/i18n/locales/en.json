@@ -55,6 +55,7 @@
     "msgCount_other": "{{count}} msg",
     "ariaClose": "Close sessions panel",
     "ariaLabel": "Conversation sessions",
+    "refreshAria": "Refresh session list",
     "groupYours": "Your sessions",
     "renameAria": "Rename session",
     "renamePlaceholder": "Session name",

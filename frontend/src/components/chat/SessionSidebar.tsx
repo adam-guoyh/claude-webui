@@ -8,6 +8,7 @@ import {
   PencilSquareIcon,
   TrashIcon,
   ArrowRightOnRectangleIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
@@ -83,6 +84,9 @@ export function SessionSidebar({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(),
   );
+  /** Bumping this re-runs the histories useEffect on demand. Combined with
+   *  the refreshKey prop via a derived dep below. */
+  const [manualRefreshTick, setManualRefreshTick] = useState(0);
 
   useEffect(() => {
     if (!encodedName) {
@@ -114,7 +118,7 @@ export function SessionSidebar({
     return () => {
       cancelled = true;
     };
-  }, [encodedName, refreshKey]);
+  }, [encodedName, refreshKey, manualRefreshTick]);
 
   // Focus + select the rename input when entering edit mode.
   useEffect(() => {
@@ -407,6 +411,17 @@ export function SessionSidebar({
           >
             <PlusIcon className="w-4 h-4" />
             {t("sidebar.newChat")}
+          </button>
+          <button
+            onClick={() => setManualRefreshTick((n) => n + 1)}
+            disabled={loading}
+            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={t("sidebar.refreshAria")}
+            title={t("sidebar.refreshAria")}
+          >
+            <ArrowPathIcon
+              className={`w-4 h-4 text-slate-500 dark:text-slate-400 ${loading ? "animate-spin" : ""}`}
+            />
           </button>
           {drawerMode && onClose && (
             <button
