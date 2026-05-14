@@ -76,6 +76,7 @@ export function createApp(
       debugMode: config.debugMode,
       runtime,
       cliPath: config.cliPath,
+      usersFile: config.usersFile,
     }),
   );
 
