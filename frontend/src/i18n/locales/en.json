@@ -51,7 +51,12 @@
     "renamePlaceholder": "Session name",
     "renameSave": "Save",
     "renameCancel": "Cancel",
-    "renameClear": "Reset to default name"
+    "renameClear": "Reset to default name",
+    "deleteAria": "Delete session",
+    "confirmDelete": "Delete this session permanently?",
+    "moveAria": "Reassign owner (admin)",
+    "movePrompt": "Reassign to which user? (empty to clear owner)",
+    "unowned": "unowned"
   },
   "usersPanel": {
     "title": "Users",

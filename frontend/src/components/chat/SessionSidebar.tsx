@@ -4,12 +4,19 @@ import {
   ChatBubbleLeftRightIcon,
   XMarkIcon,
   PencilSquareIcon,
+  TrashIcon,
+  ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
 import type { ConversationSummary } from "../../../../shared/types";
-import { getHistoriesUrl, getSessionTitleUrl } from "../../config/api";
+import {
+  getApiUrl,
+  getHistoriesUrl,
+  getSessionTitleUrl,
+} from "../../config/api";
 import { authFetch } from "../../utils/authFetch";
+import { useAuth } from "../../hooks/useAuth";
 // Side-effect: extends dayjs with the relativeTime plugin used below.
 import "../../utils/time";
 
@@ -44,6 +51,8 @@ export function SessionSidebar({
   onClose,
 }: SessionSidebarProps) {
   const { t } = useTranslation();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +123,65 @@ export function SessionSidebar({
     setEditingId(null);
     setDraft("");
   }, []);
+
+  const handleDelete = useCallback(
+    async (sessionId: string) => {
+      if (!encodedName) return;
+      if (!confirm(t("sidebar.confirmDelete"))) return;
+      try {
+        const res = await authFetch(
+          getApiUrl(
+            `/api/projects/${encodedName}/sessions/${encodeURIComponent(sessionId)}`,
+          ),
+          { method: "DELETE" },
+        );
+        if (!res.ok) throw new Error(`Delete failed: ${res.statusText}`);
+        setConversations((prev) =>
+          prev.filter((c) => c.sessionId !== sessionId),
+        );
+        if (sessionId === currentSessionId) {
+          // The currently-loaded conversation was just deleted — bounce back
+          // to the new-chat state so we don't stay on a dead session.
+          onNewChat();
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Delete failed");
+      }
+    },
+    [encodedName, currentSessionId, onNewChat, t],
+  );
+
+  const handleMove = useCallback(
+    async (sessionId: string) => {
+      if (!encodedName) return;
+      const newOwner = prompt(t("sidebar.movePrompt"));
+      if (newOwner === null) return; // cancelled
+      const trimmed = newOwner.trim();
+      try {
+        const res = await authFetch(
+          getApiUrl(
+            `/api/projects/${encodedName}/sessions/${encodeURIComponent(sessionId)}/owner`,
+          ),
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owner: trimmed === "" ? null : trimmed }),
+          },
+        );
+        if (!res.ok) throw new Error(`Move failed: ${res.statusText}`);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.sessionId === sessionId
+              ? { ...c, owner: trimmed === "" ? undefined : trimmed }
+              : c,
+          ),
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Move failed");
+      }
+    },
+    [encodedName, t],
+  );
 
   const commitRename = useCallback(
     async (sessionId: string) => {
@@ -229,31 +297,69 @@ export function SessionSidebar({
                   </form>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-1">
                       <button
                         onClick={() => handleSelect(c.sessionId)}
                         className="flex-1 min-w-0 text-left truncate font-medium"
                       >
                         {displayName(c)}
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          beginRename(c);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-opacity"
-                        aria-label={t("sidebar.renameAria")}
-                        title={t("sidebar.renameAria")}
-                      >
-                        <PencilSquareIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                      </button>
+                      <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            beginRename(c);
+                          }}
+                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+                          aria-label={t("sidebar.renameAria")}
+                          title={t("sidebar.renameAria")}
+                        >
+                          <PencilSquareIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleMove(c.sessionId);
+                            }}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+                            aria-label={t("sidebar.moveAria")}
+                            title={t("sidebar.moveAria")}
+                          >
+                            <ArrowRightOnRectangleIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(c.sessionId);
+                          }}
+                          className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/40"
+                          aria-label={t("sidebar.deleteAria")}
+                          title={t("sidebar.deleteAria")}
+                        >
+                          <TrashIcon className="w-3.5 h-3.5 text-red-500" />
+                        </button>
+                      </div>
                     </div>
                     <button
                       onClick={() => handleSelect(c.sessionId)}
                       className="w-full text-left text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center justify-between gap-2"
                     >
-                      <span>
-                        {t("sidebar.msgCount", { count: c.messageCount })}
+                      <span className="flex items-center gap-1.5">
+                        {isAdmin && c.owner && (
+                          <span className="px-1 rounded bg-slate-200 dark:bg-slate-700 text-[10px] uppercase tracking-wide">
+                            {c.owner}
+                          </span>
+                        )}
+                        {isAdmin && !c.owner && (
+                          <span className="px-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] uppercase tracking-wide">
+                            {t("sidebar.unowned")}
+                          </span>
+                        )}
+                        <span>
+                          {t("sidebar.msgCount", { count: c.messageCount })}
+                        </span>
                       </span>
                       <span>{dayjs(c.lastTime).fromNow(true)}</span>
                     </button>

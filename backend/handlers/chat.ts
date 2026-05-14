@@ -1,6 +1,8 @@
 import { Context } from "hono";
 import { query, type PermissionMode } from "@anthropic-ai/claude-code";
 import type { ChatRequest, StreamResponse } from "../../shared/types.ts";
+import { getEncodedProjectName } from "../history/pathUtils.ts";
+import { setOwner } from "../history/ownershipStore.ts";
 import { logger } from "../utils/logger.ts";
 
 /**
@@ -24,6 +26,9 @@ async function* executeClaudeCommand(
   allowedTools?: string[],
   workingDirectory?: string,
   permissionMode?: PermissionMode,
+  /** When set, ownership is recorded for the resolved sessionId after the
+   *  first SDK message that carries one. */
+  ownerToTag?: string,
 ): AsyncGenerator<StreamResponse> {
   let abortController: AbortController;
 
@@ -70,6 +75,23 @@ async function* executeClaudeCommand(
       })) {
         // Debug logging of raw SDK messages with detailed content
         logger.chat.debug("Claude SDK Message: {sdkMessage}", { sdkMessage });
+
+        // Tag ownership the first time we see a session_id come back. Idempotent
+        // by design — setOwner short-circuits when the owner already matches.
+        if (ownerToTag && workingDirectory) {
+          const sid = (sdkMessage as { session_id?: unknown }).session_id;
+          if (typeof sid === "string" && sid) {
+            try {
+              const encoded = await getEncodedProjectName(workingDirectory);
+              if (encoded) await setOwner(encoded, sid, ownerToTag);
+            } catch (e) {
+              // Ownership tagging is best-effort; don't break the stream over it.
+              logger.chat.debug("Failed to tag session ownership: {error}", {
+                error: e,
+              });
+            }
+          }
+        }
 
         yield {
           type: "claude_json",
@@ -121,6 +143,7 @@ export async function handleChatRequest(
 ) {
   const chatRequest: ChatRequest = await c.req.json();
   const { cliPath } = c.var.config;
+  const authUser = (c.var.authUser as string | null) ?? undefined;
 
   logger.chat.debug(
     "Received chat request {*}",
@@ -139,6 +162,7 @@ export async function handleChatRequest(
           chatRequest.allowedTools,
           chatRequest.workingDirectory,
           chatRequest.permissionMode,
+          authUser,
         )) {
           const data = JSON.stringify(chunk) + "\n";
           controller.enqueue(new TextEncoder().encode(data));

@@ -35,11 +35,23 @@ export interface ConversationSummary {
   lastMessagePreview: string;
   /** User-defined display name set via the rename endpoint; absent if never set. */
   customTitle?: string;
+  /**
+   * Username of the recorded session owner. Absent for sessions created
+   * before per-user ownership existed. Only included in the response for
+   * admin callers — regular users only see their own sessions to begin with.
+   */
+  owner?: string;
 }
 
 export interface SessionTitleRequest {
   /** Trim/normalize on the server. Pass null or empty string to clear. */
   title: string | null;
+}
+
+/** PUT /api/projects/:encoded/sessions/:sessionId/owner — admin only. */
+export interface SessionOwnerRequest {
+  /** New owner username. Pass null to mark the session unowned. */
+  owner: string | null;
 }
 
 export interface HistoryListResponse {

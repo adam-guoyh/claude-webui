@@ -31,7 +31,9 @@ type UserRoleCheck =
   | { ok: false; status: 401 | 403 | 404; error: string };
 import { handleProjectsRequest } from "./handlers/projects.ts";
 import {
+  handleDeleteSessionRequest,
   handleHistoriesRequest,
+  handleSetSessionOwnerRequest,
   handleSetSessionTitleRequest,
 } from "./handlers/histories.ts";
 import { handleConversationRequest } from "./handlers/conversations.ts";
@@ -62,7 +64,7 @@ export function createApp(
     "*",
     cors({
       origin: "*",
-      allowMethods: ["GET", "POST", "PUT", "OPTIONS"],
+      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
     }),
   );
@@ -267,6 +269,14 @@ export function createApp(
 
   app.put("/api/projects/:encodedProjectName/sessions/:sessionId/title", (c) =>
     handleSetSessionTitleRequest(c),
+  );
+
+  app.put("/api/projects/:encodedProjectName/sessions/:sessionId/owner", (c) =>
+    handleSetSessionOwnerRequest(c),
+  );
+
+  app.delete("/api/projects/:encodedProjectName/sessions/:sessionId", (c) =>
+    handleDeleteSessionRequest(c),
   );
 
   app.post("/api/abort/:requestId", (c) =>
