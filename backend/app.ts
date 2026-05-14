@@ -6,6 +6,7 @@
  */
 
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
 import type { Runtime } from "./runtime/types.ts";
 import {
@@ -14,7 +15,20 @@ import {
 } from "./middleware/config.ts";
 import { createAuthMiddleware } from "./middleware/auth.ts";
 import { issueSession, revokeSession } from "./auth/sessionStore.ts";
-import { verifyCredentials } from "./auth/userStore.ts";
+import {
+  UserMgmtError,
+  addUser,
+  getUserRole,
+  listUsers,
+  removeUser,
+  resetPassword,
+  verifyCredentials,
+  type UserRole,
+} from "./auth/userStore.ts";
+
+type UserRoleCheck =
+  | { ok: true }
+  | { ok: false; status: 401 | 403 | 404; error: string };
 import { handleProjectsRequest } from "./handlers/projects.ts";
 import {
   handleHistoriesRequest,
@@ -122,9 +136,123 @@ export function createApp(
   // Gated lightweight check: succeeds (200) only when the caller is
   // authenticated (or auth is disabled). Used by the login flow to verify a
   // token before transitioning into the app.
-  app.get("/api/auth/check", (c) =>
-    c.json({ ok: true, user: c.var.authUser ?? null }),
-  );
+  app.get("/api/auth/check", async (c) => {
+    const user = c.var.authUser;
+    const role =
+      user && config.usersFile
+        ? await getUserRole(config.usersFile, user)
+        : null;
+    return c.json({ ok: true, user, role });
+  });
+
+  // Translate a UserMgmtError into a JSON response so each endpoint can stay
+  // focused on the happy path.
+  const mgmtError = (c: Context<ConfigContext>, err: unknown) => {
+    if (err instanceof UserMgmtError) {
+      const status =
+        err.code === "exists"
+          ? 409
+          : err.code === "not-found"
+            ? 404
+            : err.code === "last-admin"
+              ? 400
+              : 400;
+      return c.json({ error: err.message, code: err.code }, status);
+    }
+    logger.app.error("User management error: {error}", { error: err });
+    return c.json({ error: "Internal error" }, 500);
+  };
+
+  // ─── User management (admin only) ────────────────────────────────────────
+  //
+  // These endpoints are no-ops when multi-user mode isn't enabled (404), and
+  // require an admin caller otherwise. They never reveal password hashes.
+
+  const requireAdmin = async (user: string | null): Promise<UserRoleCheck> => {
+    if (!config.usersFile)
+      return { ok: false, status: 404, error: "Multi-user not enabled" };
+    if (!user) return { ok: false, status: 401, error: "Unauthorized" };
+    const role = await getUserRole(config.usersFile, user);
+    if (role !== "admin")
+      return { ok: false, status: 403, error: "Admin only" };
+    return { ok: true };
+  };
+
+  app.get("/api/users", async (c) => {
+    const check = await requireAdmin(c.var.authUser);
+    if (!check.ok) return c.json({ error: check.error }, check.status);
+    const users = await listUsers(config.usersFile!);
+    return c.json({ users });
+  });
+
+  app.post("/api/users", async (c) => {
+    const check = await requireAdmin(c.var.authUser);
+    if (!check.ok) return c.json({ error: check.error }, check.status);
+    let body: { username?: unknown; password?: unknown; role?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON" }, 400);
+    }
+    const username =
+      typeof body.username === "string" ? body.username.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const role: UserRole = body.role === "admin" ? "admin" : "user";
+    if (!username || !password) {
+      return c.json({ error: "Username and password are required" }, 400);
+    }
+    try {
+      const user = await addUser(config.usersFile!, username, password, role);
+      return c.json({ user }, 201);
+    } catch (err) {
+      return mgmtError(c, err);
+    }
+  });
+
+  app.delete("/api/users/:username", async (c) => {
+    const check = await requireAdmin(c.var.authUser);
+    if (!check.ok) return c.json({ error: check.error }, check.status);
+    const target = c.req.param("username");
+    if (target === c.var.authUser) {
+      return c.json({ error: "You cannot remove your own account" }, 400);
+    }
+    try {
+      await removeUser(config.usersFile!, target);
+      return c.json({ ok: true });
+    } catch (err) {
+      return mgmtError(c, err);
+    }
+  });
+
+  app.put("/api/users/:username/password", async (c) => {
+    // Admins can reset anyone's password. Regular users can reset only their
+    // own (and only when the request body provides the new password). We don't
+    // require the old password for admin resets; for self-resets we don't
+    // either since the session token already proves identity.
+    if (!config.usersFile) return c.json({ error: "Not available" }, 404);
+    const caller = c.var.authUser;
+    if (!caller) return c.json({ error: "Unauthorized" }, 401);
+    const target = c.req.param("username");
+    if (target !== caller) {
+      const adminCheck = await requireAdmin(caller);
+      if (!adminCheck.ok)
+        return c.json({ error: adminCheck.error }, adminCheck.status);
+    }
+    let body: { password?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON" }, 400);
+    }
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!password) return c.json({ error: "Password is required" }, 400);
+    try {
+      await resetPassword(config.usersFile, target, password);
+      return c.json({ ok: true });
+    } catch (err) {
+      return mgmtError(c, err);
+    }
+  });
 
   // API routes
   app.get("/api/projects", (c) => handleProjectsRequest(c));

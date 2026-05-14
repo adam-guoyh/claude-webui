@@ -11,6 +11,7 @@ import {
   type AuthMode,
   type AuthStatus,
   type LoginError,
+  type UserRole,
 } from "./AuthContextTypes";
 
 const USERNAME_STORAGE_KEY = "claude-code-webui-username";
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [mode, setMode] = useState<AuthMode>("none");
   const [username, setUsername] = useState<string | null>(readStoredUsername);
+  const [role, setRole] = useState<UserRole | null>(null);
 
   // Bootstrap: ask the server about its auth configuration, then verify any
   // stored token. A stale token from a previous server config sends the user
@@ -78,11 +80,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Pick up the server-reported username if multi-user; this lets us
           // reconcile a localStorage cache against the real session owner.
           try {
-            const body = (await check.json()) as { user?: string | null };
+            const body = (await check.json()) as {
+              user?: string | null;
+              role?: UserRole | null;
+            };
             if (body.user) {
               setUsername(body.user);
               persistUsername(body.user);
             }
+            setRole(body.role ?? null);
           } catch {
             /* check response without body — fine */
           }
@@ -91,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthToken(null);
           persistUsername(null);
           setUsername(null);
+          setRole(null);
           setStatus("unauthenticated");
         }
       } catch {
@@ -115,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthToken(null);
       persistUsername(null);
       setUsername(null);
+      setRole(null);
       setStatus("unauthenticated");
     });
     return () => setUnauthorizedHandler(null);
@@ -162,6 +170,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthToken(body.token);
         setUsername(body.username);
         persistUsername(body.username);
+        // Fetch role separately via /api/auth/check so the UI can react to
+        // admin privileges immediately.
+        try {
+          const check = await authFetch(getAuthCheckUrl());
+          if (check.ok) {
+            const checkBody = (await check.json()) as {
+              role?: UserRole | null;
+            };
+            setRole(checkBody.role ?? null);
+          }
+        } catch {
+          /* ignore — role just falls back to null */
+        }
         setStatus("authenticated");
         return null;
       }
@@ -181,12 +202,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthToken(null);
     persistUsername(null);
     setUsername(null);
+    setRole(null);
     setStatus("unauthenticated");
   }, []);
 
   const value = useMemo(
-    () => ({ status, mode, username, login, loginWithPassword, logout }),
-    [status, mode, username, login, loginWithPassword, logout],
+    () => ({
+      status,
+      mode,
+      username,
+      role,
+      login,
+      loginWithPassword,
+      logout,
+    }),
+    [status, mode, username, role, login, loginWithPassword, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

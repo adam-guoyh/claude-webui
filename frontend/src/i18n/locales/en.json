@@ -53,6 +53,16 @@
     "renameCancel": "Cancel",
     "renameClear": "Reset to default name"
   },
+  "usersPanel": {
+    "title": "Users",
+    "addUser": "Add user",
+    "empty": "No users yet",
+    "roleAdmin": "admin",
+    "roleUser": "user",
+    "you": "you",
+    "removeAria": "Remove {{username}}",
+    "confirmDelete": "Remove user {{username}}?"
+  },
   "settings": {
     "title": "Settings",
     "ariaOpen": "Settings",

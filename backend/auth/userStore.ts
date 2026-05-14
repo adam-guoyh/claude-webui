@@ -2,7 +2,11 @@
  * File-backed user store.
  *
  * Reads JSON of the form:
- *   { "users": [ { "username": "alice", "passwordHash": "scrypt$N$r$p$salt$hash" }, ... ] }
+ *   {
+ *     "users": [
+ *       { "username": "alice", "passwordHash": "scrypt$...", "role": "admin" | "user" }
+ *     ]
+ *   }
  *
  * Password hashing uses Node's built-in `crypto.scrypt` so we don't pull in a
  * native dep (bcrypt) just for this. Format: `scrypt$<N>$<r>$<p>$<salt>$<hash>`,
@@ -25,13 +29,22 @@ const scrypt = promisify(scryptCb) as (
   options?: { N?: number; r?: number; p?: number; maxmem?: number },
 ) => Promise<Buffer>;
 
-interface StoredUser {
+export type UserRole = "admin" | "user";
+
+export interface StoredUser {
   username: string;
   passwordHash: string;
+  role: UserRole;
 }
 
 interface UserFile {
   users: StoredUser[];
+}
+
+/** Public-safe view, never includes the password hash. */
+export interface PublicUser {
+  username: string;
+  role: UserRole;
 }
 
 let cache: { path: string; mtime: number; users: StoredUser[] } | null = null;
@@ -79,19 +92,27 @@ async function verifyHash(password: string, stored: string): Promise<boolean> {
   }
 }
 
+function normalizeUser(raw: unknown): StoredUser | null {
+  if (!raw || typeof raw !== "object") return null;
+  const u = raw as Record<string, unknown>;
+  if (typeof u.username !== "string") return null;
+  if (typeof u.passwordHash !== "string") return null;
+  const role: UserRole = u.role === "admin" ? "admin" : "user";
+  return { username: u.username, passwordHash: u.passwordHash, role };
+}
+
 async function loadFromDisk(path: string): Promise<StoredUser[]> {
   if (!(await exists(path))) return [];
   const raw = await readTextFile(path);
   const parsed = JSON.parse(raw) as UserFile | StoredUser[];
-  const users = Array.isArray(parsed) ? parsed : (parsed?.users ?? []);
-  if (!Array.isArray(users)) return [];
-  return users.filter(
-    (u): u is StoredUser =>
-      typeof u === "object" &&
-      u !== null &&
-      typeof (u as StoredUser).username === "string" &&
-      typeof (u as StoredUser).passwordHash === "string",
-  );
+  const list = Array.isArray(parsed) ? parsed : (parsed?.users ?? []);
+  if (!Array.isArray(list)) return [];
+  const result: StoredUser[] = [];
+  for (const item of list) {
+    const u = normalizeUser(item);
+    if (u) result.push(u);
+  }
+  return result;
 }
 
 async function getUsers(path: string): Promise<StoredUser[]> {
@@ -115,6 +136,22 @@ async function getUsers(path: string): Promise<StoredUser[]> {
 
 export async function userCount(path: string): Promise<number> {
   return (await getUsers(path)).length;
+}
+
+export async function listUsers(path: string): Promise<PublicUser[]> {
+  return (await getUsers(path)).map((u) => ({
+    username: u.username,
+    role: u.role,
+  }));
+}
+
+export async function getUserRole(
+  path: string,
+  username: string,
+): Promise<UserRole | null> {
+  const users = await getUsers(path);
+  const user = users.find((u) => u.username === username);
+  return user ? user.role : null;
 }
 
 /**
@@ -148,6 +185,119 @@ export async function writeUserFile(
   cache = null;
 }
 
+/** Read users from disk, bypassing the cache. Used by mutating helpers. */
 export async function readUserFile(path: string): Promise<StoredUser[]> {
   return loadFromDisk(path);
+}
+
+export class UserMgmtError extends Error {
+  constructor(
+    public code:
+      | "exists"
+      | "not-found"
+      | "last-admin"
+      | "invalid-role"
+      | "invalid-input",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Add a new user. Throws UserMgmtError("exists") if the username is taken. */
+export async function addUser(
+  path: string,
+  username: string,
+  password: string,
+  role: UserRole = "user",
+): Promise<PublicUser> {
+  if (!username.trim() || !password) {
+    throw new UserMgmtError(
+      "invalid-input",
+      "Username and password are required",
+    );
+  }
+  if (role !== "admin" && role !== "user") {
+    throw new UserMgmtError("invalid-role", `Unknown role ${role}`);
+  }
+  const users = await readUserFile(path);
+  if (users.some((u) => u.username === username)) {
+    throw new UserMgmtError("exists", `User ${username} already exists`);
+  }
+  const passwordHash = await hashPassword(password);
+  users.push({ username, passwordHash, role });
+  await writeUserFile(path, users);
+  return { username, role };
+}
+
+/**
+ * Remove a user. Refuses to remove the last admin so the system can't lock
+ * itself out.
+ */
+export async function removeUser(
+  path: string,
+  username: string,
+): Promise<void> {
+  const users = await readUserFile(path);
+  const target = users.find((u) => u.username === username);
+  if (!target) {
+    throw new UserMgmtError("not-found", `User ${username} not found`);
+  }
+  if (target.role === "admin") {
+    const adminCount = users.filter((u) => u.role === "admin").length;
+    if (adminCount <= 1) {
+      throw new UserMgmtError(
+        "last-admin",
+        "Refusing to remove the last admin",
+      );
+    }
+  }
+  await writeUserFile(
+    path,
+    users.filter((u) => u.username !== username),
+  );
+}
+
+/** Reset a user's password. */
+export async function resetPassword(
+  path: string,
+  username: string,
+  newPassword: string,
+): Promise<void> {
+  if (!newPassword) {
+    throw new UserMgmtError("invalid-input", "Password is required");
+  }
+  const users = await readUserFile(path);
+  const idx = users.findIndex((u) => u.username === username);
+  if (idx === -1) {
+    throw new UserMgmtError("not-found", `User ${username} not found`);
+  }
+  users[idx] = { ...users[idx], passwordHash: await hashPassword(newPassword) };
+  await writeUserFile(path, users);
+}
+
+/**
+ * Idempotently ensure the configured admin exists. If the users file has no
+ * admin, create one using the provided credentials. Returns true when a new
+ * admin was created so the caller can log/print the password.
+ */
+export async function ensureAdminUser(
+  path: string,
+  username: string,
+  password: string,
+): Promise<boolean> {
+  const users = await readUserFile(path);
+  const hasAdmin = users.some((u) => u.role === "admin");
+  if (hasAdmin) return false;
+
+  const existingIdx = users.findIndex((u) => u.username === username);
+  const passwordHash = await hashPassword(password);
+  if (existingIdx === -1) {
+    users.push({ username, passwordHash, role: "admin" });
+  } else {
+    // Username collides with an existing non-admin entry — promote and reset.
+    users[existingIdx] = { username, passwordHash, role: "admin" };
+  }
+  await writeUserFile(path, users);
+  return true;
 }

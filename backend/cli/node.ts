@@ -11,6 +11,7 @@ import { NodeRuntime } from "../runtime/node.ts";
 import { parseCliArgs } from "./args.ts";
 import { validateClaudeCli } from "./validation.ts";
 import { setupLogger, logger } from "../utils/logger.ts";
+import { bootstrapAdminUser } from "../auth/bootstrap.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { exit } from "../utils/os.ts";
@@ -45,6 +46,7 @@ async function main(runtime: NodeRuntime) {
   });
 
   if (args.usersFile) {
+    await bootstrapAdminUser(args.usersFile);
     logger.cli.info(
       `🔐 Multi-user auth enabled (users file: ${args.usersFile})`,
     );

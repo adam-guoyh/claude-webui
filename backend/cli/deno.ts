@@ -10,6 +10,7 @@ import { DenoRuntime } from "../runtime/deno.ts";
 import { parseCliArgs } from "./args.ts";
 import { validateClaudeCli } from "./validation.ts";
 import { logger, setupLogger } from "../utils/logger.ts";
+import { bootstrapAdminUser } from "../auth/bootstrap.ts";
 import { dirname, fromFileUrl, join } from "@std/path";
 import { exit } from "../utils/os.ts";
 
@@ -40,6 +41,7 @@ async function main(runtime: DenoRuntime) {
   });
 
   if (args.usersFile) {
+    await bootstrapAdminUser(args.usersFile);
     logger.cli.info(
       `🔐 Multi-user auth enabled (users file: ${args.usersFile})`,
     );

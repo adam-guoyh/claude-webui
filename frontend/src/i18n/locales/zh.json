@@ -53,6 +53,16 @@
     "renameCancel": "取消",
     "renameClear": "恢复默认名称"
   },
+  "usersPanel": {
+    "title": "用户管理",
+    "addUser": "添加用户",
+    "empty": "暂无用户",
+    "roleAdmin": "管理员",
+    "roleUser": "普通用户",
+    "you": "当前",
+    "removeAria": "删除 {{username}}",
+    "confirmDelete": "确定删除用户 {{username}} 吗?"
+  },
   "settings": {
     "title": "设置",
     "ariaOpen": "设置",

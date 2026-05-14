@@ -200,7 +200,16 @@ the token has full access. Use `openssl rand -hex 32` for a random value.
 **Multi-user login** (`--users-file <path>`): a JSON file with usernames and
 scrypt password hashes. Each user logs in with username + password and gets
 their own session token. Sessions live in memory and expire after 7 days
-(restart invalidates everyone). Manage the file with the bundled script:
+(restart invalidates everyone).
+
+On first start with an empty users file, the server bootstraps an `admin`
+user. If `WEBUI_ADMIN_PASSWORD` is set in the environment, that password is
+used; otherwise a strong random password is printed to the log exactly once —
+save it before restarting. Override the default username with
+`WEBUI_ADMIN_USERNAME`.
+
+Admins manage other users from **Settings → Users** in the web UI (create,
+delete, change roles). The CLI script is also available for offline edits:
 
 ```bash
 # Add or update a user (prompts for password):
