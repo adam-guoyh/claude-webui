@@ -29,6 +29,11 @@ const scrypt = promisify(scryptCb) as (
   options?: { N?: number; r?: number; p?: number; maxmem?: number },
 ) => Promise<Buffer>;
 
+// Default scrypt parameters (N=2**15, r=8) consume 128·N·r ≈ 32 MiB which
+// is exactly Node's default `maxmem`. We raise the ceiling so scrypt
+// doesn't bounce off the limit; the cost stays the same.
+const SCRYPT_MAXMEM = 64 * 1024 * 1024;
+
 export type UserRole = "admin" | "user";
 
 export interface StoredUser {
@@ -67,7 +72,12 @@ export async function hashPassword(password: string): Promise<string> {
   const r = 8;
   const p = 1;
   const salt = randomBytes(16);
-  const derived = await scrypt(password, salt, 64, { N, r, p });
+  const derived = await scrypt(password, salt, 64, {
+    N,
+    r,
+    p,
+    maxmem: SCRYPT_MAXMEM,
+  });
   return `scrypt$${N}$${r}$${p}$${b64url(salt)}$${b64url(derived)}`;
 }
 
@@ -83,7 +93,12 @@ async function verifyHash(password: string, stored: string): Promise<boolean> {
   const salt = fromB64url(parts[4]);
   const expected = fromB64url(parts[5]);
   try {
-    const derived = await scrypt(password, salt, expected.length, { N, r, p });
+    const derived = await scrypt(password, salt, expected.length, {
+      N,
+      r,
+      p,
+      maxmem: SCRYPT_MAXMEM,
+    });
     if (derived.length !== expected.length) return false;
     return timingSafeEqual(derived, expected);
   } catch (e) {

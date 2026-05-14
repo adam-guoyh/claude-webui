@@ -35,7 +35,13 @@ async function hashPassword(password) {
   const r = 8;
   const p = 1;
   const salt = randomBytes(16);
-  const derived = await scrypt(password, salt, 64, { N, r, p });
+  // Match the backend's higher maxmem so we don't trip Node's 32 MiB default.
+  const derived = await scrypt(password, salt, 64, {
+    N,
+    r,
+    p,
+    maxmem: 64 * 1024 * 1024,
+  });
   return `scrypt$${N}$${r}$${p}$${b64url(salt)}$${b64url(derived)}`;
 }
 
