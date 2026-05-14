@@ -69,6 +69,15 @@
     "ariaOpen": "Account menu",
     "manageUsers": "Manage users"
   },
+  "projectSwitcher": {
+    "noneSelected": "No project selected",
+    "empty": "No projects yet",
+    "add": "Add",
+    "adding": "Adding…",
+    "newPlaceholder": "/absolute/path",
+    "confirmDelete": "Delete project {{path}}? This removes all of its sessions.",
+    "deleteAria": "Delete project {{path}}"
+  },
   "adminUsers": {
     "title": "User Management",
     "backAria": "Back to projects",

@@ -416,6 +416,7 @@ export function ChatPage() {
           <SessionSidebar
             encodedName={encodedName}
             currentSessionId={sessionId}
+            currentProjectPath={workingDirectory ?? null}
             refreshKey={historyRefreshKey}
             onSelectSession={handleSelectSession}
             onNewChat={handleNewChat}
@@ -534,6 +535,7 @@ export function ChatPage() {
             <SessionSidebar
               encodedName={encodedName}
               currentSessionId={sessionId}
+              currentProjectPath={workingDirectory ?? null}
               refreshKey={historyRefreshKey}
               onSelectSession={handleSelectSession}
               onNewChat={handleNewChat}

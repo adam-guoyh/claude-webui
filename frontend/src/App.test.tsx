@@ -54,7 +54,9 @@ describe("App Routing", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Claude Code Web UI")).toBeInTheDocument();
-      expect(screen.getByText("/test-path")).toBeInTheDocument();
+      // The project path now appears both in the breadcrumb and the
+      // ProjectSwitcher pill above the session list — accept any number.
+      expect(screen.getAllByText("/test-path").length).toBeGreaterThan(0);
     });
   });
 });

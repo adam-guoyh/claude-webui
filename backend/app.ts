@@ -30,7 +30,11 @@ import {
 type UserRoleCheck =
   | { ok: true }
   | { ok: false; status: 401 | 403 | 404; error: string };
-import { handleProjectsRequest } from "./handlers/projects.ts";
+import {
+  handleCreateProjectRequest,
+  handleDeleteProjectRequest,
+  handleProjectsRequest,
+} from "./handlers/projects.ts";
 import {
   handleDeleteSessionRequest,
   handleHistoriesRequest,
@@ -260,6 +264,10 @@ export function createApp(
 
   // API routes
   app.get("/api/projects", (c) => handleProjectsRequest(c));
+  app.post("/api/projects", (c) => handleCreateProjectRequest(c));
+  app.delete("/api/projects/:encodedProjectName", (c) =>
+    handleDeleteProjectRequest(c),
+  );
 
   app.get("/api/projects/:encodedProjectName/histories", (c) =>
     handleHistoriesRequest(c),

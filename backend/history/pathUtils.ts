@@ -46,6 +46,19 @@ export async function getEncodedProjectName(
 }
 
 /**
+ * Compute the encoded directory name Claude would use for the given absolute
+ * project path (without checking whether it exists).
+ *
+ * Mirrors the same character substitution as `getEncodedProjectName`:
+ * `/ \ : . _` → `-`. Used by the create-project endpoint where the directory
+ * doesn't exist yet.
+ */
+export function encodeProjectPath(projectPath: string): string {
+  const normalized = projectPath.replace(/\/$/, "");
+  return normalized.replace(/[/\\:._]/g, "-");
+}
+
+/**
  * Validate that an encoded project name is safe
  */
 export function validateEncodedProjectName(encodedName: string): boolean {

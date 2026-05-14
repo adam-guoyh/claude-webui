@@ -69,6 +69,15 @@
     "ariaOpen": "账户菜单",
     "manageUsers": "用户管理"
   },
+  "projectSwitcher": {
+    "noneSelected": "未选择项目",
+    "empty": "暂无项目",
+    "add": "添加",
+    "adding": "添加中…",
+    "newPlaceholder": "/绝对/路径",
+    "confirmDelete": "确认删除项目 {{path}}?其下所有会话都会被清除。",
+    "deleteAria": "删除项目 {{path}}"
+  },
   "adminUsers": {
     "title": "用户管理",
     "backAria": "返回项目列表",

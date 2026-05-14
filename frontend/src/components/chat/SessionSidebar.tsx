@@ -20,12 +20,15 @@ import {
 import { authFetch } from "../../utils/authFetch";
 import { useAuth } from "../../hooks/useAuth";
 import { MoveSessionDialog } from "./MoveSessionDialog";
+import { ProjectSwitcher } from "./ProjectSwitcher";
 // Side-effect: extends dayjs with the relativeTime plugin used below.
 import "../../utils/time";
 
 interface SessionSidebarProps {
   encodedName: string | null;
   currentSessionId: string | null;
+  /** Absolute path of the currently active project (drives the switcher). */
+  currentProjectPath: string | null;
   /** Bumped from the parent on events that may have changed the history file
    *  (e.g. a finished chat turn) to trigger a refetch. */
   refreshKey?: number;
@@ -58,6 +61,7 @@ interface OwnerGroup {
 export function SessionSidebar({
   encodedName,
   currentSessionId,
+  currentProjectPath,
   refreshKey = 0,
   onSelectSession,
   onNewChat,
@@ -394,23 +398,26 @@ export function SessionSidebar({
       aria-label={t("sidebar.ariaLabel")}
       className="flex flex-col h-full w-64 shrink-0 bg-white/60 dark:bg-slate-800/60 border-r border-slate-200 dark:border-slate-700 backdrop-blur-sm"
     >
-      <div className="p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
-        <button
-          onClick={handleNew}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon className="w-4 h-4" />
-          {t("sidebar.newChat")}
-        </button>
-        {drawerMode && onClose && (
+      <div className="p-3 border-b border-slate-200 dark:border-slate-700 space-y-2">
+        <ProjectSwitcher currentPath={currentProjectPath} />
+        <div className="flex items-center gap-2">
           <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            aria-label={t("sidebar.ariaClose")}
+            onClick={handleNew}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
           >
-            <XMarkIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            <PlusIcon className="w-4 h-4" />
+            {t("sidebar.newChat")}
           </button>
-        )}
+          {drawerMode && onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label={t("sidebar.ariaClose")}
+            >
+              <XMarkIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
