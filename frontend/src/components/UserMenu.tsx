@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
+  UsersIcon,
 } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 
@@ -14,6 +16,7 @@ import { useAuth } from "../hooks/useAuth";
  */
 export function UserMenu() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { status, mode, username, role, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -76,6 +79,18 @@ export function UserMenu() {
               </div>
             )}
           </div>
+          {role === "admin" && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/admin/users");
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors"
+            >
+              <UsersIcon className="w-4 h-4" />
+              {t("userMenu.manageUsers")}
+            </button>
+          )}
           <button
             onClick={() => {
               setOpen(false);

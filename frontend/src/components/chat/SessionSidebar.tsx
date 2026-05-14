@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PlusIcon,
   ChatBubbleLeftRightIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   XMarkIcon,
   PencilSquareIcon,
   TrashIcon,
@@ -42,6 +44,17 @@ function displayName(c: ConversationSummary): string {
   );
 }
 
+const UNOWNED_KEY = "__unowned__";
+const SELF_KEY = "__self__";
+
+interface OwnerGroup {
+  /** Stable React key + collapse-state key. */
+  key: string;
+  /** Already localized for display. */
+  label: string;
+  items: ConversationSummary[];
+}
+
 export function SessionSidebar({
   encodedName,
   currentSessionId,
@@ -52,7 +65,7 @@ export function SessionSidebar({
   onClose,
 }: SessionSidebarProps) {
   const { t } = useTranslation();
-  const { role } = useAuth();
+  const { role, username: callerUsername } = useAuth();
   const isAdmin = role === "admin";
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +75,10 @@ export function SessionSidebar({
   const inputRef = useRef<HTMLInputElement>(null);
   /** SessionId currently being moved, or null when the dialog is closed. */
   const [movingId, setMovingId] = useState<string | null>(null);
+  /** Group keys the user has explicitly collapsed. Default: all expanded. */
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (!encodedName) {
@@ -227,6 +244,151 @@ export function SessionSidebar({
     [encodedName, draft, cancelRename],
   );
 
+  /**
+   * Admin-only owner grouping: "Your sessions" → other users alphabetically →
+   * unowned. `null` means render the flat list (non-admin).
+   */
+  const groups = useMemo<OwnerGroup[] | null>(() => {
+    if (!isAdmin) return null;
+    const buckets = new Map<string, ConversationSummary[]>();
+    for (const c of conversations) {
+      const k = c.owner ?? UNOWNED_KEY;
+      const arr = buckets.get(k);
+      if (arr) arr.push(c);
+      else buckets.set(k, [c]);
+    }
+    const result: OwnerGroup[] = [];
+    if (callerUsername && buckets.has(callerUsername)) {
+      result.push({
+        key: SELF_KEY,
+        label: t("sidebar.groupYours"),
+        items: buckets.get(callerUsername)!,
+      });
+      buckets.delete(callerUsername);
+    }
+    const otherKeys = [...buckets.keys()]
+      .filter((k) => k !== UNOWNED_KEY)
+      .sort();
+    for (const k of otherKeys) {
+      result.push({ key: k, label: k, items: buckets.get(k)! });
+    }
+    if (buckets.has(UNOWNED_KEY)) {
+      result.push({
+        key: UNOWNED_KEY,
+        label: t("sidebar.unowned"),
+        items: buckets.get(UNOWNED_KEY)!,
+      });
+    }
+    return result;
+  }, [conversations, isAdmin, callerUsername, t]);
+
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  /** A single session row. Pulled out so it can be reused in groups. */
+  const renderRow = (c: ConversationSummary) => {
+    const isActive = c.sessionId === currentSessionId;
+    const isEditing = editingId === c.sessionId;
+    return (
+      <div
+        key={c.sessionId}
+        className={`group px-3 py-2 rounded-md text-sm transition-colors ${
+          isActive
+            ? "bg-blue-100 dark:bg-blue-900/40 text-slate-900 dark:text-slate-100"
+            : "hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-300"
+        }`}
+        title={c.customTitle ?? c.lastMessagePreview}
+      >
+        {isEditing ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void commitRename(c.sessionId);
+            }}
+            className="flex items-center gap-1"
+          >
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => void commitRename(c.sessionId)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelRename();
+                }
+              }}
+              placeholder={t("sidebar.renamePlaceholder")}
+              className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              maxLength={200}
+            />
+          </form>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-1">
+              <button
+                onClick={() => handleSelect(c.sessionId)}
+                className="flex-1 min-w-0 text-left truncate font-medium"
+              >
+                {displayName(c)}
+              </button>
+              <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    beginRename(c);
+                  }}
+                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+                  aria-label={t("sidebar.renameAria")}
+                  title={t("sidebar.renameAria")}
+                >
+                  <PencilSquareIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMovingId(c.sessionId);
+                    }}
+                    className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+                    aria-label={t("sidebar.moveAria")}
+                    title={t("sidebar.moveAria")}
+                  >
+                    <ArrowRightOnRectangleIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleDelete(c.sessionId);
+                  }}
+                  className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/40"
+                  aria-label={t("sidebar.deleteAria")}
+                  title={t("sidebar.deleteAria")}
+                >
+                  <TrashIcon className="w-3.5 h-3.5 text-red-500" />
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={() => handleSelect(c.sessionId)}
+              className="w-full text-left text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center justify-between gap-2"
+            >
+              <span>{t("sidebar.msgCount", { count: c.messageCount })}</span>
+              <span>{dayjs(c.lastTime).fromNow(true)}</span>
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <aside
       aria-label={t("sidebar.ariaLabel")}
@@ -265,117 +427,31 @@ export function SessionSidebar({
             <ChatBubbleLeftRightIcon className="w-6 h-6 opacity-50" />
             {t("sidebar.empty")}
           </div>
-        ) : (
-          conversations.map((c) => {
-            const isActive = c.sessionId === currentSessionId;
-            const isEditing = editingId === c.sessionId;
+        ) : groups ? (
+          groups.map((group) => {
+            const isCollapsed = collapsedGroups.has(group.key);
             return (
-              <div
-                key={c.sessionId}
-                className={`group px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? "bg-blue-100 dark:bg-blue-900/40 text-slate-900 dark:text-slate-100"
-                    : "hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-300"
-                }`}
-                title={c.customTitle ?? c.lastMessagePreview}
-              >
-                {isEditing ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void commitRename(c.sessionId);
-                    }}
-                    className="flex items-center gap-1"
-                  >
-                    <input
-                      ref={inputRef}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onBlur={() => void commitRename(c.sessionId)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          cancelRename();
-                        }
-                      }}
-                      placeholder={t("sidebar.renamePlaceholder")}
-                      className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      maxLength={200}
-                    />
-                  </form>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between gap-1">
-                      <button
-                        onClick={() => handleSelect(c.sessionId)}
-                        className="flex-1 min-w-0 text-left truncate font-medium"
-                      >
-                        {displayName(c)}
-                      </button>
-                      <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            beginRename(c);
-                          }}
-                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
-                          aria-label={t("sidebar.renameAria")}
-                          title={t("sidebar.renameAria")}
-                        >
-                          <PencilSquareIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                        </button>
-                        {isAdmin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMovingId(c.sessionId);
-                            }}
-                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
-                            aria-label={t("sidebar.moveAria")}
-                            title={t("sidebar.moveAria")}
-                          >
-                            <ArrowRightOnRectangleIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleDelete(c.sessionId);
-                          }}
-                          className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/40"
-                          aria-label={t("sidebar.deleteAria")}
-                          title={t("sidebar.deleteAria")}
-                        >
-                          <TrashIcon className="w-3.5 h-3.5 text-red-500" />
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleSelect(c.sessionId)}
-                      className="w-full text-left text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center justify-between gap-2"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        {isAdmin && c.owner && (
-                          <span className="px-1 rounded bg-slate-200 dark:bg-slate-700 text-[10px] uppercase tracking-wide">
-                            {c.owner}
-                          </span>
-                        )}
-                        {isAdmin && !c.owner && (
-                          <span className="px-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] uppercase tracking-wide">
-                            {t("sidebar.unowned")}
-                          </span>
-                        )}
-                        <span>
-                          {t("sidebar.msgCount", { count: c.messageCount })}
-                        </span>
-                      </span>
-                      <span>{dayjs(c.lastTime).fromNow(true)}</span>
-                    </button>
-                  </>
-                )}
+              <div key={group.key} className="space-y-1">
+                <button
+                  onClick={() => toggleGroup(group.key)}
+                  className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  {isCollapsed ? (
+                    <ChevronRightIcon className="w-3 h-3" />
+                  ) : (
+                    <ChevronDownIcon className="w-3 h-3" />
+                  )}
+                  <span className="truncate">{group.label}</span>
+                  <span className="ml-auto text-[10px] opacity-60">
+                    {group.items.length}
+                  </span>
+                </button>
+                {!isCollapsed && group.items.map(renderRow)}
               </div>
             );
           })
+        ) : (
+          conversations.map(renderRow)
         )}
       </div>
 

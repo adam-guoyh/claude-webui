@@ -4,6 +4,8 @@ import { ProjectSelector } from "./components/ProjectSelector";
 import { ChatPage } from "./components/ChatPage";
 import { Login } from "./components/Login";
 import { RequireAuth } from "./components/RequireAuth";
+import { RequireAdmin } from "./components/RequireAdmin";
+import { AdminUsersPage } from "./components/AdminUsersPage";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { isDevelopment } from "./utils/environment";
@@ -38,6 +40,14 @@ function App() {
                 <RequireAuth>
                   <ChatPage />
                 </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <RequireAdmin>
+                  <AdminUsersPage />
+                </RequireAdmin>
               }
             />
             {DemoPage && (

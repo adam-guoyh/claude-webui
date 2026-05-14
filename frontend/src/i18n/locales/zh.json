@@ -47,6 +47,7 @@
     "msgCount_other": "{{count}} 条",
     "ariaClose": "关闭会话面板",
     "ariaLabel": "对话列表",
+    "groupYours": "我的会话",
     "renameAria": "重命名会话",
     "renamePlaceholder": "会话名称",
     "renameSave": "保存",
@@ -65,7 +66,14 @@
     "unowned": "无归属"
   },
   "userMenu": {
-    "ariaOpen": "账户菜单"
+    "ariaOpen": "账户菜单",
+    "manageUsers": "用户管理"
+  },
+  "adminUsers": {
+    "title": "用户管理",
+    "backAria": "返回项目列表",
+    "addSection": "添加用户",
+    "filterPlaceholder": "筛选用户…"
   },
   "usersPanel": {
     "title": "用户管理",

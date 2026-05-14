@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { GeneralSettings } from "./settings/GeneralSettings";
-import { UsersPanel } from "./settings/UsersPanel";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -63,7 +62,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
           <div className="p-6 space-y-6">
             <GeneralSettings />
-            <UsersPanel />
           </div>
         </div>
       </div>

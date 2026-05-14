@@ -47,6 +47,7 @@
     "msgCount_other": "{{count}} msg",
     "ariaClose": "Close sessions panel",
     "ariaLabel": "Conversation sessions",
+    "groupYours": "Your sessions",
     "renameAria": "Rename session",
     "renamePlaceholder": "Session name",
     "renameSave": "Save",
@@ -65,7 +66,14 @@
     "unowned": "unowned"
   },
   "userMenu": {
-    "ariaOpen": "Account menu"
+    "ariaOpen": "Account menu",
+    "manageUsers": "Manage users"
+  },
+  "adminUsers": {
+    "title": "User Management",
+    "backAria": "Back to projects",
+    "addSection": "Add a new user",
+    "filterPlaceholder": "Filter users…"
   },
   "usersPanel": {
     "title": "Users",
