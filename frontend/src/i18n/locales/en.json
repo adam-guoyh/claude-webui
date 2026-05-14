@@ -39,6 +39,7 @@
     "select": "Select this directory"
   },
   "chat": {
+    "refreshAria": "Reload this conversation",
     "loadingHistory": "Loading conversation history…",
     "errorTitle": "Error Loading Conversation",
     "startNew": "Start New Conversation",

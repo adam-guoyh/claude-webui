@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Bars3Icon } from "@heroicons/react/24/outline";
+import { Bars3Icon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import type {
   ChatRequest,
@@ -78,6 +78,7 @@ export function ChatPage() {
     loading: historyLoading,
     error: historyError,
     sessionId: loadedSessionId,
+    loadHistory,
   } = useAutoHistoryLoader(
     getEncodedName() || undefined,
     sessionId || undefined,
@@ -461,6 +462,27 @@ export function ChatPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {sessionId && getEncodedName() && (
+                  <button
+                    onClick={() => {
+                      const enc = getEncodedName();
+                      if (enc && sessionId) {
+                        void loadHistory(enc, sessionId);
+                      }
+                      // Also bump the sidebar so its session list refetches —
+                      // the underlying JSONL may have grown server-side.
+                      setHistoryRefreshKey((k) => k + 1);
+                    }}
+                    disabled={historyLoading}
+                    className="p-3 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 backdrop-blur-sm shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label={t("chat.refreshAria")}
+                    title={t("chat.refreshAria")}
+                  >
+                    <ArrowPathIcon
+                      className={`w-5 h-5 text-slate-600 dark:text-slate-400 ${historyLoading ? "animate-spin" : ""}`}
+                    />
+                  </button>
+                )}
                 <UserMenu />
                 <SettingsButton onClick={handleSettingsClick} />
               </div>

@@ -39,6 +39,7 @@
     "select": "选择此目录"
   },
   "chat": {
+    "refreshAria": "刷新当前对话",
     "loadingHistory": "正在加载对话历史…",
     "errorTitle": "加载对话失败",
     "startNew": "开始新对话",
