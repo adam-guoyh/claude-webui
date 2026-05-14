@@ -7,6 +7,7 @@ import { getProjectsUrl } from "../config/api";
 import { authFetch } from "../utils/authFetch";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
+import { UserMenu } from "./UserMenu";
 
 export function ProjectSelector() {
   const { t } = useTranslation();
@@ -79,7 +80,10 @@ export function ProjectSelector() {
           <h1 className="text-slate-800 dark:text-slate-100 text-3xl font-bold tracking-tight">
             {t("projects.selectTitle")}
           </h1>
-          <SettingsButton onClick={handleSettingsClick} />
+          <div className="flex items-center gap-2">
+            <UserMenu />
+            <SettingsButton onClick={handleSettingsClick} />
+          </div>
         </div>
 
         <div className="space-y-3">

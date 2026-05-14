@@ -3,7 +3,6 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { GeneralSettings } from "./settings/GeneralSettings";
 import { UsersPanel } from "./settings/UsersPanel";
-import { useAuth } from "../hooks/useAuth";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -11,7 +10,6 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { status, username, logout } = useAuth();
   const { t } = useTranslation();
   // Handle ESC key to close modal
   useEffect(() => {
@@ -66,24 +64,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <div className="p-6 space-y-6">
             <GeneralSettings />
             <UsersPanel />
-            {status === "authenticated" && (
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
-                {username && (
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    {t("auth.signedInAs", { username })}
-                  </div>
-                )}
-                <button
-                  onClick={() => {
-                    logout();
-                    onClose();
-                  }}
-                  className="text-sm text-red-600 dark:text-red-400 hover:underline"
-                >
-                  {t("auth.signOut")}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>

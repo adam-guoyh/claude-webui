@@ -58,6 +58,9 @@
     "movePrompt": "转给哪位用户?(留空清除归属)",
     "unowned": "无归属"
   },
+  "userMenu": {
+    "ariaOpen": "账户菜单"
+  },
   "usersPanel": {
     "title": "用户管理",
     "addUser": "添加用户",

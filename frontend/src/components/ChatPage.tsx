@@ -16,6 +16,7 @@ import { useAbortController } from "../hooks/chat/useAbortController";
 import { useAutoHistoryLoader } from "../hooks/useHistoryLoader";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
+import { UserMenu } from "./UserMenu";
 import { ChatInput } from "./chat/ChatInput";
 import { ChatMessages } from "./chat/ChatMessages";
 import { SessionSidebar } from "./chat/SessionSidebar";
@@ -458,7 +459,8 @@ export function ChatPage() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
+                <UserMenu />
                 <SettingsButton onClick={handleSettingsClick} />
               </div>
             </div>

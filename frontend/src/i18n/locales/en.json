@@ -58,6 +58,9 @@
     "movePrompt": "Reassign to which user? (empty to clear owner)",
     "unowned": "unowned"
   },
+  "userMenu": {
+    "ariaOpen": "Account menu"
+  },
   "usersPanel": {
     "title": "Users",
     "addUser": "Add user",
