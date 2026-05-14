@@ -5,6 +5,7 @@
  * but doesn't include runtime-specific code like CLI parsing or server startup.
  */
 
+import { existsSync } from "node:fs";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
@@ -286,31 +287,47 @@ export function createApp(
 
   app.post("/api/chat", (c) => handleChatRequest(c, requestAbortControllers));
 
-  // Static file serving with SPA fallback
-  // Serve static assets (CSS, JS, images, etc.)
-  const serveStatic = runtime.createStaticFileMiddleware({
-    root: config.staticPath,
-  });
-  app.use("/assets/*", serveStatic);
+  // Static file serving with SPA fallback.
+  // In dev mode the frontend is served by Vite on a separate port, so the
+  // backend's static dir doesn't exist yet — register the middleware only
+  // when it does, otherwise @hono/node-server's serveStatic logs a noisy
+  // "root path … is not found" warning on every request.
+  if (existsSync(config.staticPath)) {
+    const serveStatic = runtime.createStaticFileMiddleware({
+      root: config.staticPath,
+    });
+    app.use("/assets/*", serveStatic);
 
-  // SPA fallback - serve index.html for all unmatched routes (except API routes)
-  app.get("*", async (c) => {
-    const path = c.req.path;
-
-    // Skip API routes
-    if (path.startsWith("/api/")) {
-      return c.text("Not found", 404);
-    }
-
-    try {
-      const indexPath = `${config.staticPath}/index.html`;
-      const indexFile = await readBinaryFile(indexPath);
-      return c.html(new TextDecoder().decode(indexFile));
-    } catch (error) {
-      logger.app.error("Error serving index.html: {error}", { error });
-      return c.text("Internal server error", 500);
-    }
-  });
+    // SPA fallback - serve index.html for all unmatched routes (except API).
+    app.get("*", async (c) => {
+      const path = c.req.path;
+      if (path.startsWith("/api/")) {
+        return c.text("Not found", 404);
+      }
+      try {
+        const indexPath = `${config.staticPath}/index.html`;
+        const indexFile = await readBinaryFile(indexPath);
+        return c.html(new TextDecoder().decode(indexFile));
+      } catch (error) {
+        logger.app.error("Error serving index.html: {error}", { error });
+        return c.text("Internal server error", 500);
+      }
+    });
+  } else {
+    logger.app.debug(
+      "Static path {path} does not exist — skipping SPA hosting (dev mode?)",
+      { path: config.staticPath },
+    );
+    // Non-API requests in dev hit Vite directly on :3000, not us. Return a
+    // helpful 404 here in case someone curls the backend by mistake.
+    app.get("*", (c) => {
+      if (c.req.path.startsWith("/api/")) return c.text("Not found", 404);
+      return c.text(
+        "Backend is running but no static bundle is mounted (dev mode). Open the Vite dev server instead.",
+        404,
+      );
+    });
+  }
 
   return app;
 }
