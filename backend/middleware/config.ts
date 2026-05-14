@@ -24,10 +24,13 @@ export function createConfigMiddleware(options: AppConfig) {
 
 /**
  * Type helper to ensure handlers can access the config variable
- * This can be used to extend the context type in handlers if needed
+ * This can be used to extend the context type in handlers if needed.
+ * `authUser` is populated by the auth middleware; null when auth is disabled
+ * or when the caller used the legacy shared bearer token.
  */
 export type ConfigContext = {
   Variables: {
     config: AppConfig;
+    authUser: string | null;
   };
 };

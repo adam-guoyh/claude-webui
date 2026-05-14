@@ -150,6 +150,7 @@ The backend server supports the following command-line options:
 | `--host <host>`         | Host address to bind to (use 0.0.0.0 for all interfaces)  | 127.0.0.1   |
 | `--claude-path <path>`  | Path to claude executable (overrides automatic detection) | Auto-detect |
 | `--auth-token <token>`  | Require this bearer token for all `/api/*` requests       | _disabled_  |
+| `--users-file <path>`   | Enable multi-user login backed by this JSON file          | _disabled_  |
 | `-d, --debug`           | Enable debug mode                                         | false       |
 | `-h, --help`            | Show help message                                         | -           |
 | `-v, --version`         | Show version                                              | -           |
@@ -159,6 +160,7 @@ The backend server supports the following command-line options:
 - `PORT` - Same as `--port`
 - `DEBUG` - Same as `--debug`
 - `WEBUI_AUTH_TOKEN` - Same as `--auth-token` (CLI flag wins if both are set)
+- `WEBUI_USERS_FILE` - Same as `--users-file`
 
 ### Examples
 
@@ -190,12 +192,36 @@ WEBUI_AUTH_TOKEN="$(openssl rand -hex 32)" claude-code-webui
 ### Authentication
 
 By default the server has **no authentication** — it binds to `127.0.0.1` and
-trusts every caller. When exposing the UI on a LAN (or anywhere reachable from
-another machine), pass `--auth-token <token>` (or set `WEBUI_AUTH_TOKEN`). Every
-`/api/*` request must then include `Authorization: Bearer <token>`; the web UI
-will redirect users to a login page on first load and store the token in
-`localStorage` after a successful sign-in. Use `openssl rand -hex 32` or any
-high-entropy generator — short or guessable tokens defeat the point.
+trusts every caller. Two opt-in modes:
+
+**Single shared token** (`--auth-token` or `WEBUI_AUTH_TOKEN`): everyone with
+the token has full access. Use `openssl rand -hex 32` for a random value.
+
+**Multi-user login** (`--users-file <path>`): a JSON file with usernames and
+scrypt password hashes. Each user logs in with username + password and gets
+their own session token. Sessions live in memory and expire after 7 days
+(restart invalidates everyone). Manage the file with the bundled script:
+
+```bash
+# Add or update a user (prompts for password):
+node backend/scripts/manage-users.mjs add alice
+
+# List users:
+node backend/scripts/manage-users.mjs list
+
+# Remove a user:
+node backend/scripts/manage-users.mjs remove alice
+
+# Custom file path (defaults to $WEBUI_USERS_FILE or ~/.claude-code-webui/users.json):
+node backend/scripts/manage-users.mjs add alice --file /path/to/users.json
+```
+
+Then start the server with `--users-file /path/to/users.json`. The login page
+will switch to a username+password form automatically.
+
+Note: all signed-in users share the same backend Claude installation and its
+credentials/history. Multi-user means "multiple identities can log in", not
+"each user gets isolated Claude data".
 
 ---
 

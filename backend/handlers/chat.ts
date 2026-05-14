@@ -83,10 +83,10 @@ async function* executeClaudeCommand(
       // a useful message back to the client.
       const stderrTail = stderrChunks.join("").trim().slice(-2000);
       const baseMsg =
-        innerError instanceof Error
-          ? innerError.message
-          : String(innerError);
-      throw new Error(stderrTail ? `${baseMsg}\n--- stderr ---\n${stderrTail}` : baseMsg);
+        innerError instanceof Error ? innerError.message : String(innerError);
+      throw new Error(
+        stderrTail ? `${baseMsg}\n--- stderr ---\n${stderrTail}` : baseMsg,
+      );
     }
   } catch (error) {
     // Check if error is due to abort

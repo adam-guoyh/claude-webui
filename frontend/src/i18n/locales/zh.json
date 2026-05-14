@@ -10,14 +10,18 @@
   },
   "auth": {
     "subtitle": "请输入服务器配置的访问令牌。",
+    "subtitleMulti": "请输入用户名和密码登录。",
     "tokenLabel": "访问令牌",
     "tokenPlaceholder": "在此粘贴 token",
+    "usernameLabel": "用户名",
+    "passwordLabel": "密码",
     "signIn": "登录",
     "verifying": "验证中…",
-    "errorEmpty": "令牌不能为空",
-    "errorInvalid": "令牌无效",
+    "errorEmpty": "请输入用户名和密码",
+    "errorInvalid": "用户名或密码错误",
     "errorOther": "登录失败({{status}})",
-    "signOut": "退出登录"
+    "signOut": "退出登录",
+    "signedInAs": "已登录为 {{username}}"
   },
   "projects": {
     "selectTitle": "选择项目",

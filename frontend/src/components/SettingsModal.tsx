@@ -10,7 +10,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { status, logout } = useAuth();
+  const { status, username, logout } = useAuth();
   const { t } = useTranslation();
   // Handle ESC key to close modal
   useEffect(() => {
@@ -65,7 +65,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <div className="p-6 space-y-6">
             <GeneralSettings />
             {status === "authenticated" && (
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                {username && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    {t("auth.signedInAs", { username })}
+                  </div>
+                )}
                 <button
                   onClick={() => {
                     logout();

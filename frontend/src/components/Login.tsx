@@ -6,8 +6,10 @@ import type { LoginError } from "../contexts/AuthContextTypes";
 
 export function Login() {
   const { t } = useTranslation();
-  const { status, login } = useAuth();
+  const { status, mode, login, loginWithPassword } = useAuth();
   const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<LoginError | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,11 +25,15 @@ export function Login() {
     return <Navigate to="/" replace />;
   }
 
+  const isMulti = mode === "multi-user";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const result = await login(token);
+    const result = isMulti
+      ? await loginWithPassword(username, password)
+      : await login(token);
     setSubmitting(false);
     if (result) setError(result);
   };
@@ -43,24 +49,54 @@ export function Login() {
             {t("app.title")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {t("auth.subtitle")}
+            {isMulti ? t("auth.subtitleMulti") : t("auth.subtitle")}
           </p>
         </div>
 
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {t("auth.tokenLabel")}
-          </span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder={t("auth.tokenPlaceholder")}
-          />
-        </label>
+        {isMulti ? (
+          <>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                {t("auth.usernameLabel")}
+              </span>
+              <input
+                type="text"
+                autoComplete="username"
+                autoFocus
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                {t("auth.passwordLabel")}
+              </span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
+          </>
+        ) : (
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {t("auth.tokenLabel")}
+            </span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={t("auth.tokenPlaceholder")}
+            />
+          </label>
+        )}
 
         {error && (
           <div

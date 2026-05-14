@@ -14,6 +14,8 @@ export interface ParsedArgs {
   host: string;
   claudePath?: string;
   authToken?: string;
+  /** Path to users.json — enables multi-user mode when set. */
+  usersFile?: string;
 }
 
 export function parseCliArgs(): ParsedArgs {
@@ -53,6 +55,10 @@ export function parseCliArgs(): ParsedArgs {
       "--auth-token <token>",
       "Shared bearer token required to access the API (also reads WEBUI_AUTH_TOKEN env var)",
     )
+    .option(
+      "--users-file <path>",
+      "Path to a JSON users file enabling multi-user login (also reads WEBUI_USERS_FILE env var)",
+    )
     .option("-d, --debug", "Enable debug mode", false);
 
   // Parse arguments - Commander.js v14 handles this automatically
@@ -67,11 +73,15 @@ export function parseCliArgs(): ParsedArgs {
   const authTokenEnv = getEnv("WEBUI_AUTH_TOKEN");
   const authToken = options.authToken || authTokenEnv || undefined;
 
+  const usersFileEnv = getEnv("WEBUI_USERS_FILE");
+  const usersFile = options.usersFile || usersFileEnv || undefined;
+
   return {
     debug: options.debug || debugFromEnv,
     port: options.port,
     host: options.host,
     claudePath: options.claudePath,
     authToken,
+    usersFile,
   };
 }

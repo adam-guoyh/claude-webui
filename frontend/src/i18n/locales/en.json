@@ -10,14 +10,18 @@
   },
   "auth": {
     "subtitle": "Enter the bearer token configured on the server.",
+    "subtitleMulti": "Sign in with your username and password.",
     "tokenLabel": "Auth token",
     "tokenPlaceholder": "paste token here",
+    "usernameLabel": "Username",
+    "passwordLabel": "Password",
     "signIn": "Sign in",
     "verifying": "Verifying…",
-    "errorEmpty": "Token cannot be empty",
-    "errorInvalid": "Invalid token",
+    "errorEmpty": "Username and password are required",
+    "errorInvalid": "Invalid credentials",
     "errorOther": "Login failed ({{status}})",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {{username}}"
   },
   "projects": {
     "selectTitle": "Select a Project",

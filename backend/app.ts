@@ -13,6 +13,8 @@ import {
   createConfigMiddleware,
 } from "./middleware/config.ts";
 import { createAuthMiddleware } from "./middleware/auth.ts";
+import { issueSession, revokeSession } from "./auth/sessionStore.ts";
+import { verifyCredentials } from "./auth/userStore.ts";
 import { handleProjectsRequest } from "./handlers/projects.ts";
 import {
   handleHistoriesRequest,
@@ -29,6 +31,7 @@ export interface AppConfig {
   staticPath: string;
   cliPath: string; // Actual CLI script path detected by validateClaudeCli
   authToken?: string;
+  usersFile?: string;
 }
 
 export function createApp(
@@ -61,20 +64,67 @@ export function createApp(
   );
 
   // Auth middleware - gates /api/* (no-op when no token configured).
-  // GET /api/auth/status is exempt so the frontend can discover whether auth
-  // is required without holding a token yet.
-  app.use("/api/*", createAuthMiddleware(config.authToken));
-
-  // Public auth-status endpoint: tells the frontend whether the server
-  // requires a bearer token. Never reveals the token itself.
-  app.get("/api/auth/status", (c) =>
-    c.json({ authRequired: Boolean(config.authToken) }),
+  // /api/auth/status and /api/auth/login are exempt inside the middleware so
+  // the frontend can discover auth requirements and sign in without yet
+  // holding a token.
+  app.use(
+    "/api/*",
+    createAuthMiddleware({
+      authToken: config.authToken,
+      usersFile: config.usersFile,
+    }),
   );
 
-  // Gated lightweight check: succeeds (200) only when the bearer token is
-  // valid (or auth is disabled). Used by the login flow to verify a token
-  // before transitioning into the app.
-  app.get("/api/auth/check", (c) => c.json({ ok: true }));
+  // Public auth-status endpoint: tells the frontend whether the server
+  // requires auth and whether multi-user (username+password) is enabled.
+  // Never reveals the token or any user data.
+  app.get("/api/auth/status", (c) =>
+    c.json({
+      authRequired: Boolean(config.authToken || config.usersFile),
+      multiUser: Boolean(config.usersFile),
+    }),
+  );
+
+  // Multi-user login: exchanges username+password for an opaque session token.
+  // Only exposed when a users file is configured.
+  app.post("/api/auth/login", async (c) => {
+    if (!config.usersFile) {
+      return c.json({ error: "Login not available" }, 404);
+    }
+    let body: { username?: unknown; password?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON" }, 400);
+    }
+    const username = typeof body.username === "string" ? body.username : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!username || !password) {
+      return c.json({ error: "Username and password are required" }, 400);
+    }
+
+    const ok = await verifyCredentials(config.usersFile, username, password);
+    if (!ok) {
+      return c.json({ error: "Invalid username or password" }, 401);
+    }
+    const token = issueSession(username);
+    return c.json({ token, username });
+  });
+
+  // Logout: revoke the bearer in the Authorization header (if any). Idempotent.
+  app.post("/api/auth/logout", (c) => {
+    const header = c.req.header("Authorization") || "";
+    const m = /^Bearer\s+(.+)$/i.exec(header);
+    if (m) revokeSession(m[1].trim());
+    return c.json({ ok: true });
+  });
+
+  // Gated lightweight check: succeeds (200) only when the caller is
+  // authenticated (or auth is disabled). Used by the login flow to verify a
+  // token before transitioning into the app.
+  app.get("/api/auth/check", (c) =>
+    c.json({ ok: true, user: c.var.authUser ?? null }),
+  );
 
   // API routes
   app.get("/api/projects", (c) => handleProjectsRequest(c));

@@ -36,12 +36,17 @@ async function main(runtime: DenoRuntime) {
     staticPath,
     cliPath: cliPath,
     authToken: args.authToken,
+    usersFile: args.usersFile,
   });
 
-  if (args.authToken) {
-    logger.cli.info("🔐 Auth enabled (bearer token required for /api/*)");
+  if (args.usersFile) {
+    logger.cli.info(
+      `🔐 Multi-user auth enabled (users file: ${args.usersFile})`,
+    );
+  } else if (args.authToken) {
+    logger.cli.info("🔐 Shared-token auth enabled (Authorization: Bearer)");
   } else {
-    logger.cli.info("🔓 Auth disabled (no token configured)");
+    logger.cli.info("🔓 Auth disabled (no token or users file configured)");
   }
 
   // Start server (only show this message when everything is ready)
