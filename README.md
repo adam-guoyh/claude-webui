@@ -1,453 +1,263 @@
-# 🌐 Claude Code Web UI
+# Claude WebUI
 
-[![npm Version](https://img.shields.io/npm/v/claude-code-webui)](https://www.npmjs.com/package/claude-code-webui)
-[![npm Downloads](https://img.shields.io/npm/dt/claude-code-webui)](https://www.npmjs.com/package/claude-code-webui)
-[![License](https://img.shields.io/github/license/sugyan/claude-code-webui)](https://github.com/sugyan/claude-code-webui/blob/main/LICENSE)
-[![CI](https://github.com/sugyan/claude-code-webui/actions/workflows/ci.yml/badge.svg)](https://github.com/sugyan/claude-code-webui/actions/workflows/ci.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/sugyan/claude-code-webui)](https://github.com/sugyan/claude-code-webui/releases)
-
-> **A modern web interface for Claude Code CLI** - Transform your command-line coding experience into an intuitive web-based chat interface
-
-[🎬 **View Demo**](https://github.com/user-attachments/assets/33e769b0-b17e-470b-8163-c71ef186b5af)
-
-## 📱 Screenshots
-
-<div align="center">
-
-| Desktop Interface                                                                                                                                  | Mobile Experience                                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| <img src="https://github.com/sugyan/claude-code-webui/raw/main/docs/images/screenshot-desktop-basic-dark.png" alt="Desktop Interface" width="600"> | <img src="https://github.com/sugyan/claude-code-webui/raw/main/docs/images/screenshot-mobile-basic-dark.png" alt="Mobile Interface" width="250"> |
-| _Chat-based coding interface with instant responses and ready input field_                                                                         | _Mobile-optimized chat experience with touch-friendly design_                                                                                    |
-
-</div>
-
-<details>
-<summary><strong>💡 Light Theme Screenshots</strong></summary>
-
-<div align="center">
-
-| Desktop (Light)                                                                                                                                 | Mobile (Light)                                                                                                                                |
-| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://github.com/sugyan/claude-code-webui/raw/main/docs/images/screenshot-desktop-basic.png" alt="Desktop Light Theme" width="600"> | <img src="https://github.com/sugyan/claude-code-webui/raw/main/docs/images/screenshot-mobile-basic.png" alt="Mobile Light Theme" width="250"> |
-| _Clean light interface for daytime coding sessions_                                                                                             | _iPhone SE optimized light theme interface_                                                                                                   |
-
-</div>
-
-</details>
-
-<details>
-<summary><strong>🔧 Advanced Features</strong></summary>
-
-<div align="center">
-
-| Desktop Permission Dialog                                                                                                                                   | Mobile Permission Dialog                                                                                                                                   |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://github.com/sugyan/claude-code-webui/raw/main/docs/images/screenshot-desktop-fileOperations-dark.png" alt="Permission Dialog" width="600"> | <img src="https://github.com/sugyan/claude-code-webui/raw/main/docs/images/screenshot-mobile-fileOperations-dark.png" alt="Mobile Permission" width="250"> |
-| _Secure tool access with granular permission controls and clear approval workflow_                                                                          | _Touch-optimized permission interface for mobile devices_                                                                                                  |
-
-</div>
-
-</details>
+A self-hosted web frontend for the [`claude` CLI](https://github.com/anthropics/claude-code) with first-class multi-user support, project management, and per-user session ownership. Runs on your own machine or LAN; talks to your Anthropic credentials through the local Claude binary.
 
 ---
 
-## 📑 Table of Contents
+## Highlights
 
-- [✨ Why Claude Code Web UI?](#-why-claude-code-web-ui)
-- [🚀 Quick Start](#-quick-start)
-- [⚙️ CLI Options](#-cli-options)
-- [🚨 Troubleshooting](#-troubleshooting)
-- [🔧 Development](#-development)
-- [🔒 Security Considerations](#-security-considerations)
-- [📚 Documentation](#-documentation)
-- [❓ FAQ](#-faq)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
+- **Multi-user login** — file-backed accounts with scrypt-hashed passwords. Auto-bootstrapped admin on first start. Each session is owned by the user who started it.
+- **In-UI project management** — browse the filesystem, create, switch and delete projects without leaving the chat. Sessions hang under their project; switching projects re-scopes the sidebar.
+- **Sidebar that scales** — always-visible session list, inline rename, delete, owner badges (admins see everyone's, grouped by owner with collapsible sections).
+- **Admin tooling** — dedicated `/admin/users` page for adding / removing accounts; admin-only "move session" dialog that searches the real user list.
+- **i18n** — English + 简体中文 out of the box. Detect from browser, override in Settings.
+- **Backward-compatible auth fallback** — single shared bearer token via `--auth-token` for hobby setups.
+- **No telemetry, no external services** — your data stays in `~/.claude/projects/` next to the Claude CLI's own.
 
 ---
 
-## ✨ Why Claude Code Web UI?
-
-**Transform the way you interact with Claude Code**
-
-Instead of being limited to command-line interactions, Claude Code Web UI brings you:
-
-| CLI Experience                | Web UI Experience            |
-| ----------------------------- | ---------------------------- |
-| ⌨️ Terminal only              | 🌐 Any device with a browser |
-| 📱 Desktop bound              | 📱 Mobile-friendly interface |
-| 📝 Plain text output          | 🎨 Rich formatted responses  |
-| 🗂️ Manual directory switching | 📁 Visual project selection  |
-
-### 🎯 Key Features
-
-- **📋 Permission Mode Switching** - Toggle between normal and plan mode execution
-- **🔄 Real-time streaming responses** - Live Claude Code output in chat interface
-- **📁 Project directory selection** - Visual project picker for context-aware sessions
-- **💬 Conversation history** - Browse and restore previous chat sessions
-- **🛠️ Tool permission management** - Granular control over Claude's tool access
-- **🎨 Dark/light theme support** - Automatic system preference detection
-- **📱 Mobile-responsive design** - Touch-optimized interface for any device
-
----
-
-## 🚀 Quick Start
-
-Get up and running in under 2 minutes:
-
-### Option 1: npm Package (Recommended)
-
-```bash
-# Install globally via npm
-npm install -g claude-code-webui
-
-# Start the server
-claude-code-webui
-
-# Open browser to http://localhost:8080
-```
-
-### Option 2: Binary Release
-
-```bash
-# Download and run (macOS ARM64 example)
-curl -LO https://github.com/sugyan/claude-code-webui/releases/latest/download/claude-code-webui-macos-arm64
-chmod +x claude-code-webui-macos-arm64
-./claude-code-webui-macos-arm64
-
-# Open browser to http://localhost:8080
-```
-
-### Option 3: Development Mode
-
-```bash
-# Backend (choose one)
-cd backend && deno task dev    # Deno runtime
-cd backend && npm run dev      # Node.js runtime
-
-# Frontend (new terminal)
-cd frontend && npm run dev
-
-# Open browser to http://localhost:3000
-```
+## Quick start
 
 ### Prerequisites
 
-- ✅ **Claude CLI** installed and authenticated ([Get it here](https://github.com/anthropics/claude-code))
-- ✅ **Node.js >=20.0.0** (for npm installation) or **Deno** (for development)
-- ✅ **Modern browser** (Chrome, Firefox, Safari, Edge)
-- ✅ **dotenvx** (for development): [Install guide](https://dotenvx.com/docs/install)
+- Node.js 20+ (or Deno) — backend runtime
+- The `claude` CLI installed and signed in (`claude login` once in a terminal)
+- A modern browser
+
+### Run in development
+
+```bash
+git clone https://github.com/adam-guoyh/claude-webui.git
+cd claude-webui
+
+# 1) Install deps (each side once)
+npm --prefix frontend install
+npm --prefix backend install
+
+# 2) Start the backend
+cd backend
+PORT=8081 \
+  WEBUI_ADMIN_PASSWORD=changeme \
+  npm run dev -- \
+    --claude-path "$(which claude)" \
+    --users-file ~/.claude-webui/users.json
+
+# 3) In another terminal, the frontend
+cd frontend
+PORT=8081 npm run dev
+```
+
+Open <http://localhost:3000/>, sign in as `admin` with the password you set, and start chatting.
+
+The first time the backend sees an empty `users.json` it creates an admin account using `WEBUI_ADMIN_USERNAME` (default `admin`) + `WEBUI_ADMIN_PASSWORD`. If you omit the password env var, the server generates a random one and prints it to stderr **once** — copy it before the next restart.
+
+### Production build
+
+```bash
+# Bundle the frontend into backend/dist/static
+make build
+
+# Then run the same backend command without --debug
+PORT=8081 \
+  WEBUI_ADMIN_PASSWORD=secret \
+  node backend/dist/cli/node.js \
+    --claude-path "$(which claude)" \
+    --users-file ~/.claude-webui/users.json
+```
+
+The backend serves the static SPA itself in production — you only need one process and one port.
 
 ---
 
-## ⚙️ CLI Options
+## CLI options
 
-The backend server supports the following command-line options:
+| Option                  | Description                                                                              | Default     |
+| ----------------------- | ---------------------------------------------------------------------------------------- | ----------- |
+| `-p, --port <port>`     | Port to listen on                                                                        | `8080`      |
+| `--host <host>`         | Host address to bind (`0.0.0.0` exposes to LAN)                                          | `127.0.0.1` |
+| `--claude-path <path>`  | Path to the `claude` executable (overrides auto-detection)                               | Auto-detect |
+| `--auth-token <token>`  | Shared bearer token required on `/api/*` (single-tenant mode)                            | _disabled_  |
+| `--users-file <path>`   | JSON file with hashed credentials — enables multi-user login                             | _disabled_  |
+| `-d, --debug`           | Verbose logging                                                                          | `false`     |
+| `-h, --help`            | Show help                                                                                | —           |
+| `-v, --version`         | Show version                                                                             | —           |
 
-| Option                  | Description                                               | Default     |
-| ----------------------- | --------------------------------------------------------- | ----------- |
-| `-p, --port <port>`     | Port to listen on                                         | 8080        |
-| `--host <host>`         | Host address to bind to (use 0.0.0.0 for all interfaces)  | 127.0.0.1   |
-| `--claude-path <path>`  | Path to claude executable (overrides automatic detection) | Auto-detect |
-| `--auth-token <token>`  | Require this bearer token for all `/api/*` requests       | _disabled_  |
-| `--users-file <path>`   | Enable multi-user login backed by this JSON file          | _disabled_  |
-| `-d, --debug`           | Enable debug mode                                         | false       |
-| `-h, --help`            | Show help message                                         | -           |
-| `-v, --version`         | Show version                                              | -           |
+Environment variables (CLI flag wins if both are set):
 
-### Environment Variables
+- `PORT` / `DEBUG` — mirrors of the flags above
+- `WEBUI_AUTH_TOKEN` — same as `--auth-token`
+- `WEBUI_USERS_FILE` — same as `--users-file`
+- `WEBUI_ADMIN_USERNAME` (default `admin`) and `WEBUI_ADMIN_PASSWORD` — used by the first-run admin bootstrap
+- `VITE_ALLOWED_HOSTS` (dev only) — comma-separated hostnames for Vite's host check, or `*` to disable. Useful when accessing the dev server through a tunnel/custom domain.
 
-- `PORT` - Same as `--port`
-- `DEBUG` - Same as `--debug`
-- `WEBUI_AUTH_TOKEN` - Same as `--auth-token` (CLI flag wins if both are set)
-- `WEBUI_USERS_FILE` - Same as `--users-file`
+---
 
-### Examples
+## Authentication modes
 
-```bash
-# Default (localhost:8080)
-claude-code-webui
+The server has **three** modes, picked by what you configure:
 
-# Custom port
-claude-code-webui --port 3000
+| Configured flags                | Mode             | Login UI                          |
+| ------------------------------- | ---------------- | --------------------------------- |
+| _(none)_                        | Open             | No login; anyone on the host can use it |
+| `--auth-token <T>`              | Shared token     | Single password field on `/login` |
+| `--users-file <path>`           | Multi-user       | Username + password on `/login`   |
 
-# Bind to all interfaces (accessible from network)
-claude-code-webui --host 0.0.0.0 --port 9000
+You can run both `--auth-token` and `--users-file` together — the token works as a legacy bypass for scripts / CI; humans use real accounts.
 
-# Enable debug mode
-claude-code-webui --debug
+### Managing users (CLI)
 
-# Custom Claude CLI path (for non-standard installations or aliases)
-claude-code-webui --claude-path /path/to/claude
-
-# Using environment variables
-PORT=9000 DEBUG=true claude-code-webui
-
-# Require a bearer token for the web UI (recommended for LAN exposure)
-claude-code-webui --auth-token "$(openssl rand -hex 32)"
-# Or via env var:
-WEBUI_AUTH_TOKEN="$(openssl rand -hex 32)" claude-code-webui
-```
-
-### Authentication
-
-By default the server has **no authentication** — it binds to `127.0.0.1` and
-trusts every caller. Two opt-in modes:
-
-**Single shared token** (`--auth-token` or `WEBUI_AUTH_TOKEN`): everyone with
-the token has full access. Use `openssl rand -hex 32` for a random value.
-
-**Multi-user login** (`--users-file <path>`): a JSON file with usernames and
-scrypt password hashes. Each user logs in with username + password and gets
-their own session token. Sessions live in memory and expire after 7 days
-(restart invalidates everyone).
-
-On first start with an empty users file, the server bootstraps an `admin`
-user. If `WEBUI_ADMIN_PASSWORD` is set in the environment, that password is
-used; otherwise a strong random password is printed to the log exactly once —
-save it before restarting. Override the default username with
-`WEBUI_ADMIN_USERNAME`.
-
-Admins manage other users from **Settings → Users** in the web UI (create,
-delete, change roles). The CLI script is also available for offline edits:
+A bundled script provides offline account management:
 
 ```bash
-# Add or update a user (prompts for password):
+# Add or replace a user (prompts for password)
 node backend/scripts/manage-users.mjs add alice
 
-# List users:
-node backend/scripts/manage-users.mjs list
-
-# Remove a user:
+# Remove
 node backend/scripts/manage-users.mjs remove alice
 
-# Custom file path (defaults to $WEBUI_USERS_FILE or ~/.claude-code-webui/users.json):
-node backend/scripts/manage-users.mjs add alice --file /path/to/users.json
+# List
+node backend/scripts/manage-users.mjs list
+
+# Custom file path (defaults to $WEBUI_USERS_FILE or ~/.claude-webui/users.json)
+node backend/scripts/manage-users.mjs list --file /path/to/users.json
 ```
 
-Then start the server with `--users-file /path/to/users.json`. The login page
-will switch to a username+password form automatically.
+### Managing users (web UI)
 
-Note: all signed-in users share the same backend Claude installation and its
-credentials/history. Multi-user means "multiple identities can log in", not
-"each user gets isolated Claude data".
+Signed-in admins also see **Manage users** in the avatar menu, which opens `/admin/users` — a full page with add / search / remove.
 
 ---
 
-## 🚨 Troubleshooting
+## How sessions work
 
-### Claude CLI Path Detection Issues
+- Every chat reply from Claude is streamed back as NDJSON; the frontend renders messages as they arrive.
+- Each session's JSONL transcript lives where the Claude CLI puts it: `~/.claude/projects/<encoded>/<sessionId>.jsonl`.
+- We add a sidecar `~/.claude/projects/<encoded>/.webui-titles.json` for user-friendly titles and `.webui-ownership.json` for per-user ownership.
+- Regular users see only sessions they own. Admins see everyone's, grouped by owner with collapsible sections.
+- Admins can **move** any session to another user (metadata-only — the JSONL is unchanged so Claude can still resume by id).
+- Anyone with an active session can **rename** or **delete** it from the sidebar; deleting drops the JSONL and clears the title/ownership entries.
 
-If you encounter "Claude Code process exited with code 1" or similar errors, this typically indicates Claude CLI path detection failure.
+The `claude` CLI itself runs as the server's Unix user with that user's Anthropic credentials. Multi-user here means "multiple identities can log in to the UI", **not** "each user has separate Claude billing/quota".
 
-**Quick Solution:**
+---
+
+## API reference
+
+Auth (public unless noted):
+
+```
+GET    /api/auth/status         → { authRequired, multiUser }
+POST   /api/auth/login          { username, password }   → { token, username }   (multi-user only)
+POST   /api/auth/logout         revoke caller's session
+GET    /api/auth/check          gated; returns { user, role }
+```
+
+Users (admin only, multi-user mode):
+
+```
+GET    /api/users                                        → { users: [{ username, role }] }
+POST   /api/users               { username, password, role? }
+DELETE /api/users/:username
+PUT    /api/users/:username/password    { password }     (admin OR self)
+```
+
+Projects:
+
+```
+GET    /api/projects                                     → { projects: [{ path, encodedName }] }
+POST   /api/projects            { path }                 → { path, encodedName }
+DELETE /api/projects/:encodedProjectName                 (admin only)
+```
+
+Sessions (under a project):
+
+```
+GET    /api/projects/:enc/histories                      → { conversations: [...] }
+GET    /api/projects/:enc/histories/:sessionId           full JSONL
+PUT    /api/projects/:enc/sessions/:sessionId/title      { title: string | null }
+PUT    /api/projects/:enc/sessions/:sessionId/owner      { owner: string | null }    (admin only)
+DELETE /api/projects/:enc/sessions/:sessionId            owner or admin
+```
+
+Chat / abort / filesystem:
+
+```
+POST   /api/chat                streaming NDJSON; body { message, sessionId?, requestId, allowedTools?, workingDirectory?, permissionMode? }
+POST   /api/abort/:requestId    cancel an in-flight chat
+GET    /api/fs/browse?path=...&showHidden=0|1            → { path, parent, entries: [{ name, isDirectory }] }
+```
+
+All `/api/*` requests (except `/api/auth/status` and `/api/auth/login` in multi-user mode) require `Authorization: Bearer <session-or-shared-token>`.
+
+---
+
+## Architecture
+
+```
+├── backend/                        # TypeScript + Hono
+│   ├── app.ts                      # Hono app composition + routes
+│   ├── cli/                        # Entry points (node.ts, deno.ts) + args + validation
+│   ├── auth/                       # User store (scrypt), session store, bootstrap
+│   ├── middleware/                 # auth + config context
+│   ├── handlers/                   # projects, browse, histories, chat, abort
+│   ├── history/                    # JSONL parse / group, title + ownership sidecars
+│   ├── runtime/                    # Minimal Node/Deno runtime abstraction
+│   └── scripts/manage-users.mjs    # Offline user admin
+│
+├── frontend/                       # Vite + React + Tailwind
+│   └── src/
+│       ├── components/             # ChatPage, SessionSidebar, ProjectSwitcher, AdminUsersPage, …
+│       ├── contexts/AuthContext    # auth status, mode, login, role
+│       ├── hooks/                  # streaming, chat state, permissions
+│       ├── i18n/                   # i18next + en/zh JSON resources
+│       └── utils/authFetch.ts      # fetch wrapper that injects the bearer
+│
+└── shared/types.ts                 # Types shared between frontend and backend
+```
+
+Key design points:
+
+- **Runtime abstraction** — `Runtime` is a tiny interface (`runCommand`, `findExecutable`, `serve`, …). Business logic doesn't know whether Node or Deno is hosting it.
+- **Raw JSON streaming** — `/api/chat` forwards `claude-code` SDK messages verbatim; the frontend interprets them. New SDK message types light up automatically.
+- **Universal CLI detection** — `backend/cli/validation.ts` traces `claude --version` through a temporary `node` shim to find the underlying script path, so npm / pnpm / asdf / Volta / native binary all work.
+- **No DB** — users, sessions, ownership, titles all live as JSON files under `~/.claude/` and `~/.claude-webui/`.
+- **In-memory session tokens** — `Authorization: Bearer <opaque32>` mapped server-side; restart invalidates everyone. Fine for local/LAN tools and avoids persisting secrets.
+
+---
+
+## Development
 
 ```bash
-claude-code-webui --claude-path "$(which claude)"
+# One-time
+npm --prefix frontend install
+npm --prefix backend install
+node backend/scripts/generate-version.js    # backend reads cli/version.ts
+
+# Run tests / checks
+npm --prefix backend run typecheck
+npm --prefix backend run test
+npm --prefix frontend run typecheck
+npm --prefix frontend run lint
+npm --prefix frontend run test:run
+npm --prefix frontend run build
+
+# Or the unified Makefile target (requires Deno installed too)
+make check
 ```
 
-**Common scenarios requiring explicit path specification:**
-
-- **Node.js environment managers** (Volta, asdf, nvm, etc.)
-- **Custom installation locations**
-- **Shell aliases or wrapper scripts**
-
-**Environment-specific commands:**
-
-```bash
-# For Volta users
-claude-code-webui --claude-path "$(volta which claude)"
-
-# For asdf users
-claude-code-webui --claude-path "$(asdf which claude)"
-```
-
-**Native Binary Installation:**
-Supported. Script path detection may fail and show warnings, but the application will work correctly as long as the Claude executable path is valid.
-
-**Debug Mode:**
-Use `--debug` flag for detailed error information:
-
-```bash
-claude-code-webui --debug
-```
+`backend/handlers/*.test.ts` and `frontend/src/**/*.test.{ts,tsx}` cover the contracts and React behaviour. Quality gates run on every push via GitHub Actions.
 
 ---
 
-## 🔧 Development
+## Security notes
 
-### Setup
-
-```bash
-# Clone repository
-git clone https://github.com/sugyan/claude-code-webui.git
-cd claude-code-webui
-
-# Install dotenvx (see prerequisites)
-
-# Start backend (choose one)
-cd backend
-deno task dev    # Deno runtime
-# OR
-npm run dev      # Node.js runtime
-
-# Start frontend (new terminal)
-cd frontend
-npm run dev
-```
-
-### Port Configuration
-
-Create `.env` file in project root:
-
-```bash
-echo "PORT=9000" > .env
-```
-
-Run with dotenvx to use the `.env` file:
-
-```bash
-# Backend
-cd backend
-dotenvx run --env-file=../.env -- deno task dev    # Deno
-dotenvx run --env-file=../.env -- npm run dev      # Node.js
-
-# Frontend (uses Vite's built-in .env support)
-cd frontend
-npm run dev
-```
-
-Alternative: Set environment variables directly:
-
-```bash
-PORT=9000 deno task dev     # Deno
-PORT=9000 npm run dev       # Node.js
-```
+- The server runs `claude` as the host Unix user. **Anyone who reaches `/api/chat` with a valid token has the same filesystem reach as that user.** Don't expose to the public internet without auth.
+- Multi-user mode does **not** isolate Claude credentials, quota, or working directories — it isolates UI sessions and ownership labels. Treat it as "multiple identities sharing one Claude account".
+- Session tokens live in `localStorage`. Susceptible to XSS the same way any token-in-localStorage app is. The repo has no third-party trackers, but if you embed external scripts, take that into account.
+- The directory browser (`/api/fs/browse`) only enumerates directory **names** the server user can read. It doesn't expose file contents. Still, it tells callers about your filesystem layout — keep auth enabled if that matters.
 
 ---
 
-## 🔒 Security Considerations
+## License
 
-**Important**: This tool executes Claude CLI locally and provides web access to it.
-
-### ✅ Safe Usage Patterns
-
-- **🏠 Local development**: Default localhost access
-- **📱 Personal network**: LAN access from your own devices
-
-### ⚠️ Security Notes
-
-- **No authentication**: Currently no built-in auth mechanism
-- **System access**: Claude can read/write files in selected projects
-- **Network exposure**: Configurable but requires careful consideration
-
-### 🛡️ Best Practices
-
-```bash
-# Local only (recommended)
-claude-code-webui --port 8080
-
-# Network access (trusted networks only)
-claude-code-webui --port 8080 --host 0.0.0.0
-```
-
-**Never expose to public internet without proper security measures.**
-
----
-
-## 📚 Documentation
-
-For comprehensive technical documentation, see [CLAUDE.md](./CLAUDE.md) which covers:
-
-- Architecture overview and design decisions
-- Detailed development setup instructions
-- API reference and message types
-
----
-
-## ❓ FAQ
-
-<details>
-<summary><strong>Q: Do I need Claude API access?</strong></summary>
-
-Yes, you need the Claude CLI tool installed and authenticated. The web UI is a frontend for the existing Claude CLI.
-
-</details>
-
-<details>
-<summary><strong>Q: Can I use this on mobile?</strong></summary>
-
-Yes! The web interface is fully responsive and works great on mobile devices when connected to your local network.
-
-</details>
-
-<details>
-<summary><strong>Q: Is my code safe?</strong></summary>
-
-Yes, everything runs locally. No data is sent to external servers except Claude's normal API calls through the CLI.
-
-</details>
-
-<details>
-<summary><strong>Q: Can I deploy this to a server?</strong></summary>
-
-While technically possible, it's designed for local use. If deploying remotely, ensure proper authentication and security measures.
-
-</details>
-
-<details>
-<summary><strong>Q: How do I update?</strong></summary>
-
-Download the latest binary from releases or pull the latest code for development mode.
-
-</details>
-
-<details>
-<summary><strong>Q: What if Claude CLI isn't found or I get "process exited with code 1"?</strong></summary>
-
-These errors typically indicate Claude CLI path detection issues. See the [Troubleshooting](#-troubleshooting) section for detailed solutions including environment manager workarounds and debug steps.
-
-</details>
-
----
-
-## 🔗 Related Projects
-
-**Alternative Claude Code Web UIs:**
-
-- **[siteboon/claudecodeui](https://github.com/siteboon/claudecodeui)**
-  - A popular web-based Claude Code interface with mobile and remote management focus
-  - Offers additional features for project and session management
-  - Great alternative if you need more advanced remote access capabilities
-
-Both projects aim to make Claude Code more accessible through web interfaces, each with their own strengths and approach.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [development setup](#-development) and feel free to:
-
-- 🐛 Report bugs
-- ✨ Suggest features
-- 📝 Improve documentation
-- 🔧 Submit pull requests
-
-**Fun fact**: This project is almost entirely written and committed by Claude Code itself! 🤖  
-We'd love to see pull requests from your Claude Code sessions too :)
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**Made with ❤️ for the Claude Code community**
-
-[⭐ Star this repo](https://github.com/sugyan/claude-code-webui) • [🐛 Report issues](https://github.com/sugyan/claude-code-webui/issues) • [💬 Discussions](https://github.com/sugyan/claude-code-webui/discussions)
-
-</div>
+MIT — see [LICENSE](LICENSE).
