@@ -44,6 +44,13 @@ async function* executeClaudeCommand(
     abortController = new AbortController();
     requestAbortControllers.set(requestId, abortController);
 
+    // Track the first session_id we see during the stream so we only tag
+    // ownership for the user's actual conversation. Claude sometimes emits
+    // additional session_ids mid-stream for sidechains, compactions, etc.;
+    // those are not the session the user started and shouldn't end up in
+    // their sidebar.
+    let taggedSessionId: string | null = null;
+
     // Pipe Claude CLI stderr into our logger so a failing child process
     // shows the real diagnostic instead of only "exited with code 1".
     // Stash chunks so we can include them in the user-facing error too.
@@ -76,11 +83,14 @@ async function* executeClaudeCommand(
         // Debug logging of raw SDK messages with detailed content
         logger.chat.debug("Claude SDK Message: {sdkMessage}", { sdkMessage });
 
-        // Tag ownership the first time we see a session_id come back. Idempotent
-        // by design — setOwner short-circuits when the owner already matches.
-        if (ownerToTag && workingDirectory) {
+        // Tag ownership exactly once — for the first session_id we see, which
+        // is the conversation the user actually started. Subsequent session_ids
+        // (sidechains, compactions) are Claude's internal forks and shouldn't
+        // surface in the user's sidebar.
+        if (ownerToTag && workingDirectory && !taggedSessionId) {
           const sid = (sdkMessage as { session_id?: unknown }).session_id;
           if (typeof sid === "string" && sid) {
+            taggedSessionId = sid;
             try {
               const encoded = await getEncodedProjectName(workingDirectory);
               if (encoded) await setOwner(encoded, sid, ownerToTag);

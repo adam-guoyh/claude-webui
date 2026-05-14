@@ -16,7 +16,7 @@ import {
   removeOwner,
   setOwner,
 } from "../history/ownershipStore.ts";
-import { getUserRole } from "../auth/userStore.ts";
+import { getUserRole, listUsers } from "../auth/userStore.ts";
 import { logger } from "../utils/logger.ts";
 import { exists, stat } from "../utils/fs.ts";
 import { getHomeDir } from "../utils/os.ts";
@@ -285,6 +285,22 @@ export async function handleSetSessionOwnerRequest(c: Context) {
       await removeOwner(encodedProjectName, sessionId);
       return c.json({ sessionId, owner: null });
     }
+
+    // Reject moves to a user that doesn't exist so the caller can't strand
+    // a session under an invalid owner string. Only enforced when a users
+    // file is configured — in open mode (no users file) any string is fine.
+    const usersFile = (c.var.config as { usersFile?: string } | undefined)
+      ?.usersFile;
+    if (usersFile) {
+      const users = await listUsers(usersFile);
+      if (!users.some((u) => u.username === body.owner)) {
+        return c.json(
+          { error: `Unknown user: ${body.owner}`, code: "unknown-user" },
+          400,
+        );
+      }
+    }
+
     await setOwner(encodedProjectName, sessionId, body.owner);
     return c.json({ sessionId, owner: body.owner });
   } catch (error) {

@@ -55,7 +55,13 @@
     "deleteAria": "删除会话",
     "confirmDelete": "确认永久删除这个会话?",
     "moveAria": "转移归属(管理员)",
-    "movePrompt": "转给哪位用户?(留空清除归属)",
+    "moveDialogTitle": "转移会话归属",
+    "moveCurrentOwner": "当前归属:{{username}}",
+    "moveSearchPlaceholder": "搜索用户…",
+    "moveNoMatches": "没有匹配的用户",
+    "moveConfirm": "转移",
+    "moveClear": "清除归属",
+    "moveClearTitle": "解除归属(管理员能看到为无归属)",
     "unowned": "无归属"
   },
   "userMenu": {

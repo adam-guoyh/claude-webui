@@ -55,7 +55,13 @@
     "deleteAria": "Delete session",
     "confirmDelete": "Delete this session permanently?",
     "moveAria": "Reassign owner (admin)",
-    "movePrompt": "Reassign to which user? (empty to clear owner)",
+    "moveDialogTitle": "Reassign session owner",
+    "moveCurrentOwner": "Current owner: {{username}}",
+    "moveSearchPlaceholder": "Search users…",
+    "moveNoMatches": "No matching users",
+    "moveConfirm": "Reassign",
+    "moveClear": "Clear owner",
+    "moveClearTitle": "Unassign this session (admin sees it as unowned)",
     "unowned": "unowned"
   },
   "userMenu": {

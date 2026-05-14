@@ -107,6 +107,16 @@ async function parseHistoryFile(
     const fileName = filePath.split("/").pop() || "";
     const sessionId = fileName.replace(".jsonl", "");
 
+    // Drop "stub" sessions that contain no assistant text. Claude CLI writes
+    // these companion JSONL files for sidechains, aborted turns, summaries
+    // etc.; they're never useful as standalone entries in the sidebar and the
+    // grouping algorithm doesn't filter them since their empty messageIds
+    // can't be a strict subset of an empty-or-smaller set. We just refuse to
+    // return them at parse time.
+    if (!lastMessagePreview) {
+      return null;
+    }
+
     return {
       sessionId,
       filePath,
@@ -115,7 +125,7 @@ async function parseHistoryFile(
       startTime,
       lastTime,
       messageCount: messages.length,
-      lastMessagePreview: lastMessagePreview || "No preview available",
+      lastMessagePreview,
     };
   } catch (error) {
     logger.history.error(`Failed to read history file ${filePath}: {error}`, {

@@ -17,6 +17,7 @@ import {
 } from "../../config/api";
 import { authFetch } from "../../utils/authFetch";
 import { useAuth } from "../../hooks/useAuth";
+import { MoveSessionDialog } from "./MoveSessionDialog";
 // Side-effect: extends dayjs with the relativeTime plugin used below.
 import "../../utils/time";
 
@@ -59,6 +60,8 @@ export function SessionSidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  /** SessionId currently being moved, or null when the dialog is closed. */
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!encodedName) {
@@ -151,12 +154,9 @@ export function SessionSidebar({
     [encodedName, currentSessionId, onNewChat, t],
   );
 
-  const handleMove = useCallback(
-    async (sessionId: string) => {
+  const commitMove = useCallback(
+    async (sessionId: string, newOwner: string | null) => {
       if (!encodedName) return;
-      const newOwner = prompt(t("sidebar.movePrompt"));
-      if (newOwner === null) return; // cancelled
-      const trimmed = newOwner.trim();
       try {
         const res = await authFetch(
           getApiUrl(
@@ -165,22 +165,30 @@ export function SessionSidebar({
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ owner: trimmed === "" ? null : trimmed }),
+            body: JSON.stringify({ owner: newOwner }),
           },
         );
-        if (!res.ok) throw new Error(`Move failed: ${res.statusText}`);
+        if (!res.ok) {
+          // Surface the server's friendly message when available (e.g.
+          // "Unknown user: alice" from the validator).
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          throw new Error(body.error || `Move failed: ${res.statusText}`);
+        }
         setConversations((prev) =>
           prev.map((c) =>
             c.sessionId === sessionId
-              ? { ...c, owner: trimmed === "" ? undefined : trimmed }
+              ? { ...c, owner: newOwner ?? undefined }
               : c,
           ),
         );
+        setMovingId(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Move failed");
       }
     },
-    [encodedName, t],
+    [encodedName],
   );
 
   const commitRename = useCallback(
@@ -320,7 +328,7 @@ export function SessionSidebar({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              void handleMove(c.sessionId);
+                              setMovingId(c.sessionId);
                             }}
                             className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600"
                             aria-label={t("sidebar.moveAria")}
@@ -370,6 +378,19 @@ export function SessionSidebar({
           })
         )}
       </div>
+
+      <MoveSessionDialog
+        open={movingId !== null}
+        currentOwner={
+          (movingId &&
+            conversations.find((c) => c.sessionId === movingId)?.owner) ||
+          null
+        }
+        onConfirm={(newOwner) => {
+          if (movingId) void commitMove(movingId, newOwner);
+        }}
+        onClose={() => setMovingId(null)}
+      />
     </aside>
   );
 }
