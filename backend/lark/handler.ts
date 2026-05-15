@@ -16,7 +16,30 @@ import {
   type LarkBinding,
 } from "./binding.ts";
 import { runLarkChat } from "./runner.ts";
+import { listUserSessionsInCwd, type SessionRow } from "./sessions.ts";
 import type { LinkCodeStore } from "../integrations/linkCodes.ts";
+
+function relativeTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return iso;
+  const diff = Date.now() - t;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function formatSessionLine(row: SessionRow, i: number): string {
+  const label =
+    row.customTitle ||
+    (row.lastMessagePreview
+      ? row.lastMessagePreview.replace(/\s+/g, " ").slice(0, 60)
+      : "(no preview)");
+  return `${i + 1}. ${row.sessionId.slice(0, 8)}… · ${relativeTime(row.lastTime)} · ${row.messageCount} msgs · ${label}`;
+}
 
 export interface LarkHandlerConfig {
   cliPath: string;
@@ -79,6 +102,8 @@ const HELP_TEXT = [
   "/unbind                        forget the link",
   "/status                        show the current binding",
   "/cd <absolute path>            change the working directory",
+  "/list                          list your recent sessions in the current cwd",
+  "/resume <sessionId or 8-char>  continue an existing webui session",
   "/new                           start a fresh Claude session",
   "/help                          show this message",
   "",
@@ -224,6 +249,70 @@ export async function handleLarkMessage(
           sessionId: undefined, // new directory ⇒ new session
         });
         await cfg.sendText(msg.chatId, `cwd → ${newCwd} (session reset).`);
+        return;
+      }
+
+      if (trimmed === "/list") {
+        const rows = await listUserSessionsInCwd(binding.cwd, binding.username);
+        if (rows.length === 0) {
+          await cfg.sendText(
+            msg.chatId,
+            `No sessions yet under ${binding.cwd}. Send a message to start one.`,
+          );
+          return;
+        }
+        const top = rows.slice(0, 8);
+        const body = [
+          `Your recent sessions under ${binding.cwd}:`,
+          ...top.map(formatSessionLine),
+          "",
+          "Continue one with: /resume <sessionId-or-first-8-chars>",
+        ].join("\n");
+        await cfg.sendText(msg.chatId, body);
+        return;
+      }
+
+      if (trimmed.startsWith("/resume ") || trimmed === "/resume") {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length !== 2) {
+          await cfg.sendText(
+            msg.chatId,
+            "Usage: /resume <sessionId-or-first-8-chars>   (use /list to see options)",
+          );
+          return;
+        }
+        const target = parts[1].toLowerCase();
+        const rows = await listUserSessionsInCwd(binding.cwd, binding.username);
+        const matches = rows.filter((r) =>
+          r.sessionId.toLowerCase().startsWith(target),
+        );
+        if (matches.length === 0) {
+          await cfg.sendText(
+            msg.chatId,
+            `No session matches "${parts[1]}" under ${binding.cwd}. Try /list.`,
+          );
+          return;
+        }
+        if (matches.length > 1) {
+          const previews = matches
+            .slice(0, 5)
+            .map(formatSessionLine)
+            .join("\n");
+          await cfg.sendText(
+            msg.chatId,
+            `Multiple sessions match "${parts[1]}". Use a longer prefix:\n${previews}`,
+          );
+          return;
+        }
+        const picked = matches[0];
+        await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
+          sessionId: picked.sessionId,
+        });
+        const label = picked.customTitle || picked.lastMessagePreview || "";
+        await cfg.sendText(
+          msg.chatId,
+          `Resumed session ${picked.sessionId.slice(0, 8)}…${label ? ` — "${label.slice(0, 80)}"` : ""}. Next message continues this conversation.`,
+        );
         return;
       }
 
