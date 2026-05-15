@@ -82,6 +82,11 @@ export interface LarkHandlerConfig {
   /** Which Feishu app this dispatcher belongs to — keys the binding store. */
   appId: string;
   defaultCwd: string;
+  /**
+   * Integration provider id. Defaults to "lark" for backward compat; QQ
+   * passes "qq" so /link consumes codes for the right provider.
+   */
+  providerId?: string;
   /** Send a text reply to the chat that originated the event. */
   sendText: (chatId: string, text: string) => Promise<void>;
   /**
@@ -196,7 +201,7 @@ export async function handleLarkMessage(
           return;
         }
         const code = parts[1];
-        const username = cfg.linkCodes.consume(code, "lark");
+        const username = cfg.linkCodes.consume(code, cfg.providerId ?? "lark");
         if (!username) {
           await cfg.sendText(
             msg.chatId,

@@ -13,6 +13,7 @@ import { getApiUrl } from "../config/api";
 import { providerLabel } from "../utils/providerName";
 import { useAuth } from "../hooks/useAuth";
 import { LarkAppAdmin } from "./LarkAppAdmin";
+import { QqAppAdmin } from "./QqAppAdmin";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 import { UserMenu } from "./UserMenu";
@@ -167,10 +168,11 @@ export function IntegrationsPage() {
           </div>
         )}
 
-        {/* LarkAppAdmin self-decides what to show based on caller role +
-            the admin-controlled allowUserApps setting; safe to mount
+        {/* Each provider admin card self-decides what to show based on
+            caller role + per-user permission; safe to mount
             unconditionally. */}
         <LarkAppAdmin onChange={() => void refresh()} />
+        <QqAppAdmin onChange={() => void refresh()} />
         {/* keep isAdmin available for future admin-specific UI hooks */}
         {isAdmin ? null : null}
 

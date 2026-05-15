@@ -178,7 +178,11 @@ Once signed in as admin, open the avatar menu → **Integrations** → top card 
 - Empty owner → **shared**: admin-managed, every webui user can `/link` via that bot.
 - Username owner → **personal**: only that user manages it from their own Integrations page.
 
-Admins decide **per user** who's allowed to register their own apps. Open `/admin/users` → each row has an `App access` group with one checkbox per registered integration provider (currently just `Feishu / Lark`; adding WeChat/QQ later would add more boxes here without any UI change). When a box is checked, that user sees the add/remove form on the Integrations page for that provider and their new apps are automatically owned by themselves; they can only delete what they own. Default: nothing checked for new users, so a fresh install behaves admin-only.
+Admins decide **per user** who's allowed to register their own apps. Open `/admin/users` → each row has an `App access` group with one checkbox per registered integration provider (currently `飞书 / Feishu` and `QQ`). When a box is checked, that user sees the add/remove form on the Integrations page for that provider and their new apps are automatically owned by themselves; they can only delete what they own. Default: nothing checked for new users, so a fresh install behaves admin-only.
+
+### QQ official bot (qqbot.com)
+
+The QQ provider uses the same long-connection model as Feishu. Get an `appid` + `secret` from qqbot.com / 腾讯开放平台, then register the app on the Integrations page just like a Feishu app. The bot subscribes to `GROUP_AND_C2C_EVENT` so it can be DM'd (C2C) or @-mentioned in groups. Configs live at `~/.claude-webui/qq-apps.json`, bindings at `~/.claude-webui/qq-bindings.json`. Use the `Sandbox` checkbox if you're targeting QQ's test environment.
 
 The bot opens a websocket per app to Feishu, so the backend host needs outbound HTTPS but no inbound port.
 
@@ -268,12 +272,17 @@ POST   /api/integrations/:provider/code                        → { code, expir
 DELETE /api/integrations/:provider/bindings/:externalId        unbind an IM account from the caller
 ```
 
-Integrations — Feishu / Lark app management:
+Integrations — provider app management (Feishu / Lark and QQ share the same shape):
 
 ```
 GET    /api/integrations/lark/apps                              → { apps: [{ id, appId, domain, displayName?, owner?, running, canManage, createdAt }] }
 POST   /api/integrations/lark/apps     { appId, appSecret, domain?, displayName?, owner? }
 DELETE /api/integrations/lark/apps/:id
+
+GET    /api/integrations/qq/apps                                → { apps: [{ id, appId, sandbox, displayName?, owner?, running, canManage, createdAt }] }
+POST   /api/integrations/qq/apps       { appId, appSecret, sandbox?, displayName?, owner? }
+DELETE /api/integrations/qq/apps/:id
+
 GET    /api/integrations/lark/settings                          → { canManageApps, role }
 ```
 

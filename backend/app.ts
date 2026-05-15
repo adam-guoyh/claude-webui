@@ -48,12 +48,15 @@ import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
 import {
   handleAddLarkApp,
+  handleAddQqApp,
   handleGetLarkSettings,
   handleIssueLinkCode,
   handleListIntegrations,
   handleListLarkApps,
+  handleListQqApps,
   handleRemoveBinding,
   handleRemoveLarkApp,
+  handleRemoveQqApp,
   type IntegrationsDeps,
 } from "./handlers/integrations.ts";
 import { logger } from "./utils/logger.ts";
@@ -360,6 +363,11 @@ export function createApp(
     app.post("/api/integrations/lark/apps", (c) => handleAddLarkApp(c, deps));
     app.delete("/api/integrations/lark/apps/:id", (c) =>
       handleRemoveLarkApp(c, deps),
+    );
+    app.get("/api/integrations/qq/apps", (c) => handleListQqApps(c, deps));
+    app.post("/api/integrations/qq/apps", (c) => handleAddQqApp(c, deps));
+    app.delete("/api/integrations/qq/apps/:id", (c) =>
+      handleRemoveQqApp(c, deps),
     );
     // Settings: read returns `{canManageApps, role}` for the calling user
     // — the UI uses it to decide whether to show the add/remove form. The

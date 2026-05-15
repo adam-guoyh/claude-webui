@@ -21,6 +21,8 @@ import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 import type { IntegrationsListResponse } from "../../shared/types.ts";
 import type { LarkBotManager } from "../lark/manager.ts";
 import { LarkAppMgmtError, publicView } from "../lark/appStore.ts";
+import { QqAppMgmtError, publicView as publicQqView } from "../qq/appStore.ts";
+import type { QqBotManager } from "../qq/manager.ts";
 import { canManageProviderApps, getUserRole } from "../auth/userStore.ts";
 
 export interface IntegrationsDeps {
@@ -28,6 +30,7 @@ export interface IntegrationsDeps {
   codes: LinkCodeStore;
   /** Optional: present when admin lifecycle is enabled. */
   larkManager?: LarkBotManager;
+  qqManager?: QqBotManager;
 }
 
 type CallerRole = "admin" | "user" | "open";
@@ -253,6 +256,136 @@ export async function handleRemoveLarkApp(
     return c.json({ ok: true });
   } catch (err) {
     if (err instanceof LarkAppMgmtError && err.code === "not-found") {
+      return c.json({ error: err.message, code: err.code }, 404);
+    }
+    return c.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      500,
+    );
+  }
+}
+
+// ─── QQ app management ────────────────────────────────────────────────
+//
+// Parallels the Lark handlers above. Future cleanup: extract a generic
+// "BotManager + AppRecord" interface and drop the duplication.
+
+export async function handleListQqApps(
+  c: Context<ConfigContext>,
+  deps: IntegrationsDeps,
+): Promise<Response> {
+  if (!deps.qqManager) {
+    return c.json({ error: "QQ management not available" }, 404);
+  }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const role = await resolveRole(c);
+  const records = await deps.qqManager.list();
+  return c.json({
+    apps: records.map((r) => ({
+      ...publicQqView(r),
+      running: deps.qqManager!.isRunning(r.id),
+      canManage: role === "admin" || role === "open" || r.owner === user,
+    })),
+  });
+}
+
+export async function handleAddQqApp(
+  c: Context<ConfigContext>,
+  deps: IntegrationsDeps,
+): Promise<Response> {
+  if (!deps.qqManager) {
+    return c.json({ error: "QQ management not available" }, 404);
+  }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const role = await resolveRole(c);
+  if (!(await canManageProvider(c, role, "qq"))) {
+    return c.json(
+      {
+        error:
+          "Adding QQ apps is not allowed for your account. Ask an admin to grant the permission in /admin/users.",
+      },
+      403,
+    );
+  }
+  let body: {
+    appId?: unknown;
+    appSecret?: unknown;
+    sandbox?: unknown;
+    displayName?: unknown;
+    owner?: unknown;
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const appId = typeof body.appId === "string" ? body.appId : "";
+  const appSecret = typeof body.appSecret === "string" ? body.appSecret : "";
+  const sandbox = typeof body.sandbox === "boolean" ? body.sandbox : false;
+  const displayName =
+    typeof body.displayName === "string" ? body.displayName : undefined;
+  if (!appId || !appSecret) {
+    return c.json({ error: "appId and appSecret are required" }, 400);
+  }
+  let owner: string | undefined;
+  if (role === "user") {
+    owner = user;
+  } else if (typeof body.owner === "string" && body.owner.trim()) {
+    owner = body.owner.trim();
+  } else {
+    owner = undefined;
+  }
+  try {
+    const record = await deps.qqManager.add({
+      appId,
+      appSecret,
+      sandbox,
+      displayName,
+      owner,
+    });
+    return c.json(
+      { app: { ...publicQqView(record), running: true, canManage: true } },
+      201,
+    );
+  } catch (err) {
+    if (err instanceof QqAppMgmtError) {
+      const status = err.code === "exists" ? 409 : 400;
+      return c.json({ error: err.message, code: err.code }, status);
+    }
+    return c.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      500,
+    );
+  }
+}
+
+export async function handleRemoveQqApp(
+  c: Context<ConfigContext>,
+  deps: IntegrationsDeps,
+): Promise<Response> {
+  if (!deps.qqManager) {
+    return c.json({ error: "QQ management not available" }, 404);
+  }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const id = c.req.param("id");
+  if (!id) return c.json({ error: "Missing id" }, 400);
+  const role = await resolveRole(c);
+  if (role === "user") {
+    const records = await deps.qqManager.list();
+    const target = records.find((r) => r.id === id);
+    if (!target) return c.json({ error: "App not found" }, 404);
+    if (target.owner !== user) {
+      return c.json({ error: "You can only remove your own apps" }, 403);
+    }
+  }
+  try {
+    await deps.qqManager.remove(id);
+    return c.json({ ok: true });
+  } catch (err) {
+    if (err instanceof QqAppMgmtError && err.code === "not-found") {
       return c.json({ error: err.message, code: err.code }, 404);
     }
     return c.json(

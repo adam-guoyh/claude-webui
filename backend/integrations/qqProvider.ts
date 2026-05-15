@@ -1,42 +1,72 @@
 /**
- * QQ provider scaffold.
- *
- * Registered alongside the Lark provider so the rest of the multi-provider
- * machinery (admin per-user permission checkbox, Integrations binding card)
- * can demonstrate that the framework is provider-agnostic. The actual QQ
- * bot connection isn't wired yet — when we plug in the official QQ bot
- * SDK (qqbot.com WebSocket gateway), only this file's body needs to grow.
- *
- * Until then, `isEnabled` returns false so the Integrations page renders
- * the "preview / not yet configured" hint and the user can't generate
- * link codes for it.
+ * QQ provider for the integration registry. Reads from the same nested
+ * binding-file structure the Lark provider uses (keyed by appId →
+ * openId), just under a separate file path.
  */
 
 import type { IntegrationBinding } from "../../shared/types.ts";
+import {
+  loadBindings,
+  removeBinding as removeBindingFn,
+} from "../lark/binding.ts";
+import { listApps } from "../qq/appStore.ts";
 import type { IntegrationProvider } from "./registry.ts";
 
-export function createQqProvider(): IntegrationProvider {
+export interface QqProviderOptions {
+  bindingPath: string;
+  appsFilePath: string;
+}
+
+function parseExternalId(
+  composite: string,
+): { appId: string; openId: string } | null {
+  const idx = composite.indexOf(":");
+  if (idx <= 0 || idx === composite.length - 1) return null;
+  return {
+    appId: composite.slice(0, idx),
+    openId: composite.slice(idx + 1),
+  };
+}
+
+export function createQqProvider(
+  options: QqProviderOptions,
+): IntegrationProvider {
   return {
     id: "qq",
     displayName: "QQ",
 
     async isEnabled(): Promise<boolean> {
-      // Flip to a real check (e.g. "at least one QQ app registered") once
-      // the bot connection lands. Until then we keep it disabled so users
-      // can see the framework is multi-provider without us pretending QQ
-      // delivery works.
-      return false;
+      const apps = await listApps(options.appsFilePath);
+      return apps.length > 0;
     },
 
-    async listBindings(_username: string): Promise<IntegrationBinding[]> {
-      return [];
+    async listBindings(username: string): Promise<IntegrationBinding[]> {
+      const all = await loadBindings(options.bindingPath);
+      const out: IntegrationBinding[] = [];
+      for (const [appId, perApp] of Object.entries(all)) {
+        for (const [openId, b] of Object.entries(perApp)) {
+          if (b.username !== username) continue;
+          out.push({
+            externalId: `${appId}:${openId}`,
+            cwd: b.cwd,
+            sessionId: b.sessionId,
+          });
+        }
+      }
+      return out;
     },
 
     async removeBinding(
-      _username: string,
-      _externalId: string,
+      username: string,
+      externalId: string,
     ): Promise<boolean> {
-      return false;
+      const parsed = parseExternalId(externalId);
+      if (!parsed) return false;
+      const all = await loadBindings(options.bindingPath);
+      const current = all[parsed.appId]?.[parsed.openId];
+      if (!current || current.username !== username) return false;
+      await removeBindingFn(options.bindingPath, parsed.appId, parsed.openId);
+      return true;
     },
   };
 }

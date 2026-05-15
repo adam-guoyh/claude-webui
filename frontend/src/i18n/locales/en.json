@@ -132,7 +132,12 @@
     "appOwnerOf": "owner: {{name}}",
     "userPermHint": "Grant individual users the right to register their own apps in /admin/users (column ‘App access’).",
     "domainFeishu": "Feishu (China)",
-    "domainLark": "Lark (international)"
+    "domainLark": "Lark (international)",
+    "qqAppsTitle": "QQ apps",
+    "qqAppsSubtitle": "Register QQ official-bot apps here (appid + secret from qqbot.com). Adding one connects via the WebSocket gateway; no public URL needed.",
+    "qqAppIdPlaceholder": "appid (e.g. 102000000)",
+    "qqSandboxLabel": "Sandbox",
+    "qqProductionLabel": "Production"
   },
   "projectSwitcher": {
     "noneSelected": "No project selected",

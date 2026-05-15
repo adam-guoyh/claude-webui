@@ -18,6 +18,11 @@ import { IntegrationRegistry } from "../integrations/registry.ts";
 import { LinkCodeStore } from "../integrations/linkCodes.ts";
 import { createLarkProvider } from "../integrations/larkProvider.ts";
 import { createQqProvider } from "../integrations/qqProvider.ts";
+import { QqBotManager } from "../qq/manager.ts";
+import {
+  defaultAppsPath as defaultQqAppsPath,
+  defaultBindingsPath as defaultQqBindingsPath,
+} from "../qq/appStore.ts";
 import { getHomeDir } from "../utils/os.ts";
 import { dirname, fromFileUrl, join } from "@std/path";
 import { exit } from "../utils/os.ts";
@@ -50,16 +55,30 @@ async function main(runtime: DenoRuntime) {
       appsFilePath: larkAppsPath,
     }),
   );
-  // Stub provider — surfaces "QQ" in the admin user-permission UI and on
-  // the Integrations page so the multi-provider design is visible.
-  integrationRegistry.register(createQqProvider());
+  const qqAppsPath = defaultQqAppsPath();
+  const qqBindingsPath = defaultQqBindingsPath();
+  integrationRegistry.register(
+    createQqProvider({
+      bindingPath: qqBindingsPath,
+      appsFilePath: qqAppsPath,
+    }),
+  );
 
   let larkManager: LarkBotManager | undefined;
+  let qqManager: QqBotManager | undefined;
   if (args.usersFile) {
     const defaultCwd = args.larkDefaultCwd ?? getHomeDir() ?? Deno.cwd();
     larkManager = new LarkBotManager({
       appsFilePath: larkAppsPath,
       bindingPath: larkBindingPath,
+      cliPath,
+      usersFile: args.usersFile,
+      defaultCwd,
+      linkCodes,
+    });
+    qqManager = new QqBotManager({
+      appsFilePath: qqAppsPath,
+      bindingPath: qqBindingsPath,
       cliPath,
       usersFile: args.usersFile,
       defaultCwd,
@@ -77,6 +96,7 @@ async function main(runtime: DenoRuntime) {
       registry: integrationRegistry,
       codes: linkCodes,
       larkManager,
+      qqManager,
     },
   });
 
@@ -103,6 +123,7 @@ async function main(runtime: DenoRuntime) {
       });
     }
     await larkManager.startAll();
+    if (qqManager) await qqManager.startAll();
   } else if (args.larkAppId && args.larkAppSecret) {
     logger.cli.warn(
       "⚠️  --lark-app-id/secret provided but --users-file is not set; the Feishu bot needs a users file for /bind verification and will not start.",

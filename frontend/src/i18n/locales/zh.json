@@ -132,7 +132,12 @@
     "appOwnerOf": "归属:{{name}}",
     "userPermHint": "在 /admin/users 里勾选某个用户的「应用权限」,即可让其在应用绑定页面登记自己对应的 IM 应用。",
     "domainFeishu": "飞书 (国内)",
-    "domainLark": "Lark (海外)"
+    "domainLark": "Lark (海外)",
+    "qqAppsTitle": "QQ 应用",
+    "qqAppsSubtitle": "在此登记 QQ 官方机器人应用(qqbot.com 的 appid + secret)。添加后走 WebSocket 网关接入,无需公网回调地址。",
+    "qqAppIdPlaceholder": "appid(如 102000000)",
+    "qqSandboxLabel": "沙箱环境",
+    "qqProductionLabel": "正式环境"
   },
   "projectSwitcher": {
     "noneSelected": "未选择项目",

@@ -121,6 +121,29 @@ export interface LarkAppCreateRequest {
   owner?: string | null;
 }
 
+export interface QqAppPublic {
+  id: string;
+  appId: string;
+  sandbox: boolean;
+  displayName?: string;
+  owner?: string;
+  createdAt: string;
+  running: boolean;
+  canManage: boolean;
+}
+
+export interface QqAppsResponse {
+  apps: QqAppPublic[];
+}
+
+export interface QqAppCreateRequest {
+  appId: string;
+  appSecret: string;
+  sandbox?: boolean;
+  displayName?: string;
+  owner?: string | null;
+}
+
 export interface LarkSettingsResponse {
   /** True when the calling user can add/remove their own Lark apps. Derived
    *  server-side from role + per-user permission. */
