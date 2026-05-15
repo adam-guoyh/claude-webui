@@ -12,6 +12,8 @@ import { parseCliArgs } from "./args.ts";
 import { validateClaudeCli } from "./validation.ts";
 import { setupLogger, logger } from "../utils/logger.ts";
 import { bootstrapAdminUser } from "../auth/bootstrap.ts";
+import { startLarkBot } from "../lark/index.ts";
+import { getHomeDir } from "../utils/os.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { exit } from "../utils/os.ts";
@@ -54,6 +56,26 @@ async function main(runtime: NodeRuntime) {
     logger.cli.info("🔐 Shared-token auth enabled (Authorization: Bearer)");
   } else {
     logger.cli.info("🔓 Auth disabled (no token or users file configured)");
+  }
+
+  // Optional Feishu / Lark bot. Multi-user login is required so the bot
+  // can verify /bind credentials against the users file.
+  if (args.larkAppId && args.larkAppSecret) {
+    if (!args.usersFile) {
+      logger.cli.warn(
+        "⚠️  --lark-app-id/secret provided but --users-file is not set; the Feishu bot needs a users file for /bind verification and will not start.",
+      );
+    } else {
+      const defaultCwd = args.larkDefaultCwd ?? getHomeDir() ?? process.cwd();
+      await startLarkBot({
+        appId: args.larkAppId,
+        appSecret: args.larkAppSecret,
+        cliPath,
+        usersFile: args.usersFile,
+        defaultCwd,
+        domain: args.larkDomain,
+      });
+    }
   }
 
   // Start server (only show this message when everything is ready)

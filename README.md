@@ -78,6 +78,10 @@ The backend serves the static SPA itself in production — you only need one pro
 | `--claude-path <path>`  | Path to the `claude` executable (overrides auto-detection)                               | Auto-detect |
 | `--auth-token <token>`  | Shared bearer token required on `/api/*` (single-tenant mode)                            | _disabled_  |
 | `--users-file <path>`   | JSON file with hashed credentials — enables multi-user login                             | _disabled_  |
+| `--lark-app-id <id>`    | Feishu / Lark app id — turns on the chat bot (needs `--users-file`)                      | _disabled_  |
+| `--lark-app-secret <s>` | Feishu / Lark app secret                                                                 | _disabled_  |
+| `--lark-domain <name>`  | `feishu` (China, default) or `lark` (international)                                      | `feishu`    |
+| `--lark-default-cwd <p>`| Working directory the bot hands to Claude before `/cd`                                   | `$HOME`     |
 | `-d, --debug`           | Verbose logging                                                                          | `false`     |
 | `-h, --help`            | Show help                                                                                | —           |
 | `-v, --version`         | Show version                                                                             | —           |
@@ -87,6 +91,7 @@ Environment variables (CLI flag wins if both are set):
 - `PORT` / `DEBUG` — mirrors of the flags above
 - `WEBUI_AUTH_TOKEN` — same as `--auth-token`
 - `WEBUI_USERS_FILE` — same as `--users-file`
+- `WEBUI_LARK_APP_ID` / `WEBUI_LARK_APP_SECRET` / `WEBUI_LARK_DOMAIN` / `WEBUI_LARK_DEFAULT_CWD` — mirrors of the `--lark-*` flags
 - `WEBUI_ADMIN_USERNAME` (default `admin`) and `WEBUI_ADMIN_PASSWORD` — used by the first-run admin bootstrap
 - `VITE_ALLOWED_HOSTS` (dev only) — comma-separated hostnames for Vite's host check, or `*` to disable. Useful when accessing the dev server through a tunnel/custom domain.
 
@@ -138,6 +143,53 @@ Signed-in admins also see **Manage users** in the avatar menu, which opens `/adm
 - Anyone with an active session can **rename** or **delete** it from the sidebar; deleting drops the JSONL and clears the title/ownership entries.
 
 The `claude` CLI itself runs as the server's Unix user with that user's Anthropic credentials. Multi-user here means "multiple identities can log in to the UI", **not** "each user has separate Claude billing/quota".
+
+---
+
+## Feishu / Lark bot
+
+The backend can also serve as a Feishu (China) or Lark (international) chat bot, so people on your team can talk to Claude from the same IM they already use. Each Feishu account binds to one webui user — sessions, ownership, and project working directory follow that user.
+
+### Set up the app
+
+1. Create a "Custom App" in the [Feishu Open Platform](https://open.feishu.cn/app) or [Lark Developer Console](https://open.larksuite.com/app). Copy the **App ID** and **App Secret**.
+2. Under **Features → Bot**, enable the bot capability.
+3. Under **Events & Callbacks**, choose **Use long-connection mode** (no public callback URL needed) and subscribe to **`im.message.receive_v1`** (receive messages).
+4. Permissions: grant **`im:message`** (receive messages) and **`im:message:send_as_bot`** (send messages).
+5. Publish a version of the app and wait for it to be approved by your tenant admin.
+
+### Run the backend with the bot
+
+```bash
+PORT=8081 \
+  WEBUI_ADMIN_PASSWORD=changeme \
+  npm --prefix backend run dev -- \
+    --claude-path "$(which claude)" \
+    --users-file ~/.claude-webui/users.json \
+    --lark-app-id cli_abcdef \
+    --lark-app-secret xxxxxxxxxxxxxxxx \
+    --lark-domain feishu \
+    --lark-default-cwd "$HOME/work"
+```
+
+Multi-user mode (`--users-file`) is required: the bot uses webui accounts to authenticate `/bind`. The bot opens a websocket to Feishu, so the backend host needs outbound HTTPS but no inbound port.
+
+### Talk to the bot
+
+DM the bot, or @-mention it in a group. Commands:
+
+| Command                          | Effect                                                       |
+| -------------------------------- | ------------------------------------------------------------ |
+| `/bind <username> <password>`    | Link this Feishu account to a webui user                     |
+| `/unbind`                        | Forget the link                                              |
+| `/status`                        | Show the current binding (user / cwd / session id)           |
+| `/cd <absolute path>`            | Change the working directory (also starts a fresh session)   |
+| `/new`                           | Start a fresh Claude session under the same directory       |
+| `/help`                          | List commands                                                |
+
+Any plain message is forwarded to Claude under the bound webui account. The bot collects Claude's complete response and posts it as a single Feishu message ("best reply" mode) so multi-paragraph answers and code blocks stay intact. Sessions persist across bot restarts — the bound `sessionId` is stored at `~/.claude-webui/lark-bindings.json`.
+
+Sessions created via the bot show up in the webui sidebar under the bound user, so an admin can move them, rename them, or pick up the conversation in the browser.
 
 ---
 
