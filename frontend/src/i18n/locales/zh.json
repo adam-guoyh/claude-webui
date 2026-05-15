@@ -77,7 +77,35 @@
   },
   "userMenu": {
     "ariaOpen": "账户菜单",
-    "manageUsers": "用户管理"
+    "manageUsers": "用户管理",
+    "integrations": "应用绑定"
+  },
+  "integrations": {
+    "title": "应用绑定",
+    "backAria": "返回项目列表",
+    "subtitle": "将一个 IM 账号(飞书 / Lark / 微信 / QQ 等)绑定到当前 webui 用户。",
+    "empty": "服务器未启用任何应用集成。",
+    "notEnabled": "服务器未配置该应用,请联系管理员设置应用凭据。",
+    "providerLark": "飞书 / Lark",
+    "bindingsHeader": "已绑定账号",
+    "bindingsEmpty": "尚未绑定任何账号。",
+    "externalIdLabel": "外部 ID",
+    "cwdLabel": "工作目录",
+    "sessionLabel": "会话",
+    "unlink": "解绑",
+    "confirmUnlink": "确定要解绑该账号吗?",
+    "generateCode": "生成配对码",
+    "generating": "生成中…",
+    "regenerate": "生成新的配对码",
+    "codeInstructions": "请在 {{minutes}} 分钟内,在 {{provider}} 中向机器人发送此命令:",
+    "codeExpiresAt": "过期时间:{{time}}",
+    "codeOnceWarning": "一次性使用。配对码不要泄露给他人,否则他人可将其账号绑定到你名下。",
+    "copyAria": "复制配对码",
+    "copied": "已复制!",
+    "refresh": "刷新",
+    "loadFailed": "加载应用绑定失败",
+    "codeFailed": "生成配对码失败",
+    "unlinkFailed": "解绑失败"
   },
   "projectSwitcher": {
     "noneSelected": "未选择项目",

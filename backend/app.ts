@@ -45,6 +45,12 @@ import {
 import { handleConversationRequest } from "./handlers/conversations.ts";
 import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
+import {
+  handleIssueLinkCode,
+  handleListIntegrations,
+  handleRemoveBinding,
+  type IntegrationsDeps,
+} from "./handlers/integrations.ts";
 import { logger } from "./utils/logger.ts";
 import { readBinaryFile } from "./utils/fs.ts";
 
@@ -54,6 +60,8 @@ export interface AppConfig {
   cliPath: string; // Actual CLI script path detected by validateClaudeCli
   authToken?: string;
   usersFile?: string;
+  /** Optional — present when at least one IM provider is configured. */
+  integrations?: IntegrationsDeps;
 }
 
 export function createApp(
@@ -296,6 +304,24 @@ export function createApp(
   );
 
   app.post("/api/chat", (c) => handleChatRequest(c, requestAbortControllers));
+
+  // Integrations (IM account ↔ webui user). Only mounted in multi-user mode
+  // since each binding has to belong to a real user; without a users file
+  // there is no "self" to bind. Returns 404 otherwise.
+  if (config.integrations && config.usersFile) {
+    const deps = config.integrations;
+    app.get("/api/integrations", (c) => handleListIntegrations(c, deps));
+    app.post("/api/integrations/:provider/code", (c) =>
+      handleIssueLinkCode(c, deps),
+    );
+    app.delete("/api/integrations/:provider/bindings/:externalId", (c) =>
+      handleRemoveBinding(c, deps),
+    );
+  } else {
+    app.get("/api/integrations", (c) =>
+      c.json({ error: "Integrations not available" }, 404),
+    );
+  }
 
   // Static file serving with SPA fallback.
   // In dev mode the frontend is served by Vite on a separate port, so the

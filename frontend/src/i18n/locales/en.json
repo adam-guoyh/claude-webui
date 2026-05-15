@@ -77,7 +77,35 @@
   },
   "userMenu": {
     "ariaOpen": "Account menu",
-    "manageUsers": "Manage users"
+    "manageUsers": "Manage users",
+    "integrations": "Integrations"
+  },
+  "integrations": {
+    "title": "Integrations",
+    "backAria": "Back to projects",
+    "subtitle": "Link an IM account (Feishu / Lark / WeChat / QQ / …) to this webui user.",
+    "empty": "No integration providers are registered on this server.",
+    "notEnabled": "Not configured on this server. Ask an admin to set up the provider credentials.",
+    "providerLark": "Feishu / Lark",
+    "bindingsHeader": "Linked accounts",
+    "bindingsEmpty": "No accounts linked yet.",
+    "externalIdLabel": "External id",
+    "cwdLabel": "Working directory",
+    "sessionLabel": "Session",
+    "unlink": "Unlink",
+    "confirmUnlink": "Unlink this account?",
+    "generateCode": "Generate pairing code",
+    "generating": "Generating…",
+    "regenerate": "Generate a new code",
+    "codeInstructions": "Open the bot in {{provider}} and send this command within {{minutes}} minutes:",
+    "codeExpiresAt": "Expires at {{time}}",
+    "codeOnceWarning": "Single-use. Anyone who knows the code can link their account to yours — keep it private.",
+    "copyAria": "Copy code",
+    "copied": "Copied!",
+    "refresh": "Refresh",
+    "loadFailed": "Failed to load integrations",
+    "codeFailed": "Failed to generate code",
+    "unlinkFailed": "Failed to unlink"
   },
   "projectSwitcher": {
     "noneSelected": "No project selected",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRightOnRectangleIcon,
+  LinkIcon,
   UserCircleIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
@@ -89,6 +90,18 @@ export function UserMenu() {
             >
               <UsersIcon className="w-4 h-4" />
               {t("userMenu.manageUsers")}
+            </button>
+          )}
+          {mode === "multi-user" && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/integrations");
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors"
+            >
+              <LinkIcon className="w-4 h-4" />
+              {t("userMenu.integrations")}
             </button>
           )}
           <button

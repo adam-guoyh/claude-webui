@@ -174,12 +174,22 @@ PORT=8081 \
 
 Multi-user mode (`--users-file`) is required: the bot uses webui accounts to authenticate `/bind`. The bot opens a websocket to Feishu, so the backend host needs outbound HTTPS but no inbound port.
 
+### Pair an account
+
+There are two ways to link a Feishu account to a webui user:
+
+1. **From the web UI (recommended)** — sign in, open the avatar menu → **Integrations**, hit **Generate pairing code**. The page shows a one-time code that's valid for 10 minutes; DM the bot `/link <code>` to finish.
+2. **From chat directly** — DM the bot `/bind <username> <password>` with your webui credentials.
+
+The Integrations page also lists every Feishu account currently bound to your webui user and lets you unbind any of them. Admins can additionally see and move sessions created by the bot from the regular session sidebar.
+
 ### Talk to the bot
 
 DM the bot, or @-mention it in a group. Commands:
 
 | Command                          | Effect                                                       |
 | -------------------------------- | ------------------------------------------------------------ |
+| `/link <code>`                   | Pair using a code from the web UI's Integrations page        |
 | `/bind <username> <password>`    | Link this Feishu account to a webui user                     |
 | `/unbind`                        | Forget the link                                              |
 | `/status`                        | Show the current binding (user / cwd / session id)           |
@@ -237,6 +247,14 @@ Chat / abort / filesystem:
 POST   /api/chat                streaming NDJSON; body { message, sessionId?, requestId, allowedTools?, workingDirectory?, permissionMode? }
 POST   /api/abort/:requestId    cancel an in-flight chat
 GET    /api/fs/browse?path=...&showHidden=0|1            → { path, parent, entries: [{ name, isDirectory }] }
+```
+
+Integrations (multi-user mode, gated; per-caller):
+
+```
+GET    /api/integrations                                      → { providers: [{ id, displayName, enabled, bindings: [...] }] }
+POST   /api/integrations/:provider/code                        → { code, expiresAt, ttlSeconds }   (single-use, 10 min)
+DELETE /api/integrations/:provider/bindings/:externalId        unbind an IM account from the caller
 ```
 
 All `/api/*` requests (except `/api/auth/status` and `/api/auth/login` in multi-user mode) require `Authorization: Bearer <session-or-shared-token>`.

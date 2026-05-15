@@ -8,6 +8,7 @@ import * as lark from "@larksuiteoapi/node-sdk";
 import { logger } from "../utils/logger.ts";
 import { defaultBindingPath } from "./binding.ts";
 import { handleLarkMessage, type LarkHandlerConfig } from "./handler.ts";
+import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 
 export interface LarkConfig {
   appId: string;
@@ -18,6 +19,8 @@ export interface LarkConfig {
   bindingPath?: string;
   /** "feishu" (China) or "lark" (international). Defaults to feishu. */
   domain?: "feishu" | "lark";
+  /** Shared link-code store so `/link <code>` works inside the bot. */
+  linkCodes?: LinkCodeStore;
 }
 
 interface ReceiveEvent {
@@ -85,6 +88,7 @@ export async function startLarkBot(cfg: LarkConfig): Promise<void> {
     bindingPath,
     defaultCwd: cfg.defaultCwd,
     sendText,
+    linkCodes: cfg.linkCodes,
   };
 
   const wsClient = new lark.WSClient({

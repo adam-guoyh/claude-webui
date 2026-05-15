@@ -58,6 +58,38 @@ export interface HistoryListResponse {
   conversations: ConversationSummary[];
 }
 
+/**
+ * Per-provider binding visible to the logged-in user. `externalId` is opaque
+ * (e.g. Feishu open_id) — the UI shows it truncated. `cwd`/`sessionId` come
+ * from whichever bot owns the binding store.
+ */
+export interface IntegrationBinding {
+  externalId: string;
+  cwd: string;
+  sessionId?: string;
+}
+
+export interface IntegrationProvider {
+  id: string;
+  displayName: string;
+  /** True when the backend has credentials configured for this provider. */
+  enabled: boolean;
+  /** Bindings owned by the calling user, possibly empty. */
+  bindings: IntegrationBinding[];
+}
+
+export interface IntegrationsListResponse {
+  providers: IntegrationProvider[];
+}
+
+export interface IntegrationCodeResponse {
+  code: string;
+  /** ISO timestamp the code expires at. */
+  expiresAt: string;
+  /** TTL in seconds, mirrored for convenience. */
+  ttlSeconds: number;
+}
+
 // Conversation history types
 // Note: messages are typed as unknown[] to avoid frontend/backend dependency issues
 // Frontend should cast to TimestampedSDKMessage[] (defined in frontend/src/types.ts)

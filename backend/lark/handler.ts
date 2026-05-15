@@ -6,7 +6,7 @@
  * remaining plain-text messages through Claude via `runLarkChat`.
  */
 
-import { verifyCredentials } from "../auth/userStore.ts";
+import { getUserRole, verifyCredentials } from "../auth/userStore.ts";
 import { logger } from "../utils/logger.ts";
 import {
   getBinding,
@@ -16,6 +16,7 @@ import {
   type LarkBinding,
 } from "./binding.ts";
 import { runLarkChat } from "./runner.ts";
+import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 
 export interface LarkHandlerConfig {
   cliPath: string;
@@ -24,6 +25,12 @@ export interface LarkHandlerConfig {
   defaultCwd: string;
   /** Send a text reply to the chat that originated the event. */
   sendText: (chatId: string, text: string) => Promise<void>;
+  /**
+   * Optional link-code store. When provided, `/link <code>` is accepted as
+   * an alternative to `/bind <user> <pass>`. The store is shared with the
+   * HTTP `/api/integrations/:provider/code` endpoint.
+   */
+  linkCodes?: LinkCodeStore;
 }
 
 interface IncomingMessage {
@@ -65,6 +72,7 @@ function statusLine(binding: LarkBinding): string {
 
 const HELP_TEXT = [
   "Available commands:",
+  "/link <code>                   pair using a code from the web UI's Integrations page",
   "/bind <username> <password>   link this Feishu account to a webui user",
   "/unbind                        forget the link",
   "/status                        show the current binding",
@@ -91,6 +99,53 @@ export async function handleLarkMessage(
     try {
       if (trimmed === "" || trimmed === "/help") {
         await cfg.sendText(msg.chatId, HELP_TEXT);
+        return;
+      }
+
+      if (trimmed.startsWith("/link ") || trimmed === "/link") {
+        if (!cfg.linkCodes) {
+          await cfg.sendText(
+            msg.chatId,
+            "Code-based linking is not enabled on this server. Use /bind <username> <password>.",
+          );
+          return;
+        }
+        const parts = trimmed.split(/\s+/);
+        if (parts.length !== 2) {
+          await cfg.sendText(
+            msg.chatId,
+            "Usage: /link <code>   (get the code from the web UI's Integrations page)",
+          );
+          return;
+        }
+        const code = parts[1];
+        const username = cfg.linkCodes.consume(code, "lark");
+        if (!username) {
+          await cfg.sendText(
+            msg.chatId,
+            "That code is invalid or expired. Generate a new one in the web UI.",
+          );
+          return;
+        }
+        // Defensive: the user could have been deleted between code issue
+        // and consumption.
+        const role = await getUserRole(cfg.usersFile, username);
+        if (!role) {
+          await cfg.sendText(
+            msg.chatId,
+            `The user "${username}" no longer exists. Ask an admin to recreate it.`,
+          );
+          return;
+        }
+        const next: LarkBinding = {
+          username,
+          cwd: binding?.cwd ?? cfg.defaultCwd,
+        };
+        await setBinding(cfg.bindingPath, msg.openId, next);
+        await cfg.sendText(
+          msg.chatId,
+          `Linked as ${username}. Working directory: ${next.cwd}\n${HELP_TEXT}`,
+        );
         return;
       }
 
@@ -131,7 +186,7 @@ export async function handleLarkMessage(
       if (!binding) {
         await cfg.sendText(
           msg.chatId,
-          "You need to /bind <username> <password> first.",
+          "You need to pair this account first. Either run /link <code> with a code from the web UI's Integrations page, or /bind <username> <password>.",
         );
         return;
       }

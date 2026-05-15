@@ -6,6 +6,7 @@ import { Login } from "./components/Login";
 import { RequireAuth } from "./components/RequireAuth";
 import { RequireAdmin } from "./components/RequireAdmin";
 import { AdminUsersPage } from "./components/AdminUsersPage";
+import { IntegrationsPage } from "./components/IntegrationsPage";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { isDevelopment } from "./utils/environment";
@@ -48,6 +49,14 @@ function App() {
                 <RequireAdmin>
                   <AdminUsersPage />
                 </RequireAdmin>
+              }
+            />
+            <Route
+              path="/integrations"
+              element={
+                <RequireAuth>
+                  <IntegrationsPage />
+                </RequireAuth>
               }
             />
             {DemoPage && (
