@@ -159,8 +159,12 @@
     "you": "当前",
     "removeAria": "删除 {{username}}",
     "confirmDelete": "确定删除用户 {{username}} 吗?",
-    "manageAppsLabel": "应用权限:",
-    "manageAppsHint": "勾选该用户可以在应用绑定页面登记 / 移除哪些 IM 的自己应用。管理员始终拥有所有权限。"
+    "manageAppsLabel": "应用权限",
+    "manageAppsHint": "勾选该用户可以在应用绑定页面登记 / 移除哪些 IM 的自己应用。管理员始终拥有所有权限。",
+    "manageAppsNone": "无应用权限",
+    "manageAppsAll": "全部(管理员)",
+    "manageAppsCount_one": "{{first}}",
+    "manageAppsCount_other": "{{count}} / {{total}} 个"
   },
   "settings": {
     "title": "设置",

@@ -159,8 +159,12 @@
     "you": "you",
     "removeAria": "Remove {{username}}",
     "confirmDelete": "Remove user {{username}}?",
-    "manageAppsLabel": "App access:",
-    "manageAppsHint": "Check the integrations this user may register / remove their own apps for on the Integrations page. Admins always can."
+    "manageAppsLabel": "App access",
+    "manageAppsHint": "Pick the integrations this user may register / remove their own apps for on the Integrations page. Admins always can.",
+    "manageAppsNone": "No app access",
+    "manageAppsAll": "All apps (admin)",
+    "manageAppsCount_one": "{{first}}",
+    "manageAppsCount_other": "{{count}} / {{total}} apps"
   },
   "settings": {
     "title": "Settings",

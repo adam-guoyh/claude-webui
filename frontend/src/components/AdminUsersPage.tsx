@@ -8,8 +8,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../utils/authFetch";
 import { getApiUrl } from "../config/api";
-import { providerLabel } from "../utils/providerName";
 import { useAuth } from "../hooks/useAuth";
+import { ProviderPermissionMenu } from "./ProviderPermissionMenu";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 import { UserMenu } from "./UserMenu";
@@ -300,49 +300,18 @@ export function AdminUsersPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    {providers.length > 0 && (
-                      <div
-                        className="flex items-center gap-2 shrink-0"
-                        title={t("usersPanel.manageAppsHint")}
-                      >
-                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          {t("usersPanel.manageAppsLabel")}
-                        </span>
-                        {providers.map((p) => {
-                          const granted =
-                            u.role === "admin" ||
-                            (u.permissions.manageApps ?? []).includes(p.id);
-                          return (
-                            <label
-                              key={p.id}
-                              className={`flex items-center gap-1 text-xs select-none ${
-                                u.role === "admin"
-                                  ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                                  : "text-slate-600 dark:text-slate-300 cursor-pointer"
-                              }`}
-                              title={providerLabel(t, p.id, p.displayName)}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={granted}
-                                disabled={u.role === "admin"}
-                                onChange={(e) =>
-                                  void handleToggleProviderPerm(
-                                    u.username,
-                                    p.id,
-                                    e.target.checked,
-                                  )
-                                }
-                                className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                              />
-                              <span>
-                                {providerLabel(t, p.id, p.displayName)}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
+                    <ProviderPermissionMenu
+                      providers={providers}
+                      granted={u.permissions.manageApps ?? []}
+                      forcedAll={u.role === "admin"}
+                      onToggle={(providerId, next) =>
+                        void handleToggleProviderPerm(
+                          u.username,
+                          providerId,
+                          next,
+                        )
+                      }
+                    />
                     <button
                       onClick={() => void handleDelete(u.username)}
                       disabled={u.username === currentUser}
