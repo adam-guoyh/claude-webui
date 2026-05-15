@@ -26,6 +26,12 @@ export interface LarkConfig {
   linkCodes?: LinkCodeStore;
 }
 
+/**
+ * Shape of the `data` argument the SDK's EventDispatcher hands to the
+ * `im.message.receive_v1` handler. The SDK unwraps the outer envelope
+ * itself, so `sender` / `message` live directly on `data` (NOT under
+ * `data.event` as one might guess from the raw webhook JSON).
+ */
 interface ReceiveEvent {
   message?: {
     chat_id?: string;
@@ -112,8 +118,8 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
   });
 
   const dispatcher = new lark.EventDispatcher({}).register({
-    "im.message.receive_v1": async (data: { event?: ReceiveEvent }) => {
-      const ev = data.event;
+    "im.message.receive_v1": async (data: ReceiveEvent) => {
+      const ev = data;
       const openId = ev?.sender?.sender_id?.open_id;
       const chatId = ev?.message?.chat_id;
       const content = ev?.message?.content;
