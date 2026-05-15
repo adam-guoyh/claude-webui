@@ -47,7 +47,6 @@ export function LarkAppAdmin({ onChange }: Props) {
     owner: "",
   });
   const [submitting, setSubmitting] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -155,30 +154,6 @@ export function LarkAppAdmin({ onChange }: Props) {
     }
   };
 
-  const handleToggleAllowUsers = async () => {
-    if (!settings) return;
-    setSavingSettings(true);
-    setError(null);
-    try {
-      const res = await authFetch(
-        getApiUrl("/api/integrations/lark/settings"),
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allowUserApps: !settings.allowUserApps }),
-        },
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await refresh();
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : t("integrations.settingsSaveFailed"),
-      );
-    } finally {
-      setSavingSettings(false);
-    }
-  };
-
   // Endpoint not mounted (no users-file or no lark manager) — render nothing.
   if (!loading && settings === null && apps.length === 0 && !error) {
     return null;
@@ -204,20 +179,8 @@ export function LarkAppAdmin({ onChange }: Props) {
       )}
 
       {isAdmin && settings && (
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.allowUserApps}
-              onChange={() => void handleToggleAllowUsers()}
-              disabled={savingSettings}
-              className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
-            />
-            <span>{t("integrations.allowUserAppsLabel")}</span>
-          </label>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
-            {t("integrations.allowUserAppsHint")}
-          </span>
+        <div className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+          {t("integrations.userPermHint")}
         </div>
       )}
 

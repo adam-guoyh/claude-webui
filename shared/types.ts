@@ -122,8 +122,8 @@ export interface LarkAppCreateRequest {
 }
 
 export interface LarkSettingsResponse {
-  allowUserApps: boolean;
-  /** Convenience flag derived from role + allowUserApps. */
+  /** True when the calling user can add/remove their own Lark apps. Derived
+   *  server-side from role + per-user permission. */
   canManageApps: boolean;
   role: "admin" | "user" | "open";
 }

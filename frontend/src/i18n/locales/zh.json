@@ -125,9 +125,7 @@
     "appOwnerHint": "管理员:留空 = 共享(所有人可 /link);填用户名 = 仅该用户管理",
     "appOwnerShared": "共享",
     "appOwnerOf": "归属:{{name}}",
-    "allowUserAppsLabel": "允许普通用户登记自己的应用",
-    "allowUserAppsHint": "关闭:仅管理员管理应用。打开:每个用户可添加/移除自己的应用。",
-    "settingsSaveFailed": "保存设置失败",
+    "userPermHint": "在 /admin/users 里勾选某个用户的「Lark 应用」权限,即可让其在应用绑定页面登记自己的应用。",
     "domainFeishu": "飞书 (国内)",
     "domainLark": "Lark (海外)"
   },
@@ -155,7 +153,9 @@
     "roleUser": "普通用户",
     "you": "当前",
     "removeAria": "删除 {{username}}",
-    "confirmDelete": "确定删除用户 {{username}} 吗?"
+    "confirmDelete": "确定删除用户 {{username}} 吗?",
+    "larkAppsPermLabel": "Lark 应用",
+    "larkAppsPermHint": "勾选后,该用户可在应用绑定页面登记/移除自己的飞书 / Lark 应用。管理员始终拥有此权限。"
   },
   "settings": {
     "title": "设置",

@@ -14,9 +14,14 @@ import { SettingsModal } from "./SettingsModal";
 import { UserMenu } from "./UserMenu";
 import type { UserRole } from "../contexts/AuthContextTypes";
 
+interface UserPermissions {
+  canManageLarkApps?: boolean;
+}
+
 interface ListedUser {
   username: string;
   role: UserRole;
+  permissions: UserPermissions;
 }
 
 /**
@@ -112,6 +117,48 @@ export function AdminUsersPage() {
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete user");
+    }
+  };
+
+  const handleToggleLarkPerm = async (
+    username: string,
+    next: boolean,
+  ): Promise<void> => {
+    setError(null);
+    // Optimistic update so the checkbox doesn't lag the API round-trip.
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.username === username
+          ? {
+              ...u,
+              permissions: { ...u.permissions, canManageLarkApps: next },
+            }
+          : u,
+      ),
+    );
+    try {
+      const res = await authFetch(
+        getApiUrl(
+          `/api/users/${encodeURIComponent(username)}/permissions`,
+        ),
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ canManageLarkApps: next }),
+        },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Failed to update permission",
+      );
+      // Roll back optimistic update.
+      await refresh();
     }
   };
 
@@ -227,17 +274,47 @@ export function AdminUsersPage() {
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => void handleDelete(u.username)}
-                    disabled={u.username === currentUser}
-                    className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                    aria-label={t("usersPanel.removeAria", {
-                      username: u.username,
-                    })}
-                    title={t("usersPanel.removeAria", { username: u.username })}
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <label
+                      className={`flex items-center gap-1.5 text-xs select-none ${
+                        u.role === "admin"
+                          ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                          : "text-slate-600 dark:text-slate-300 cursor-pointer"
+                      }`}
+                      title={t("usersPanel.larkAppsPermHint")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          u.role === "admin"
+                            ? true
+                            : !!u.permissions.canManageLarkApps
+                        }
+                        disabled={u.role === "admin"}
+                        onChange={(e) =>
+                          void handleToggleLarkPerm(
+                            u.username,
+                            e.target.checked,
+                          )
+                        }
+                        className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                      />
+                      <span>{t("usersPanel.larkAppsPermLabel")}</span>
+                    </label>
+                    <button
+                      onClick={() => void handleDelete(u.username)}
+                      disabled={u.username === currentUser}
+                      className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                      aria-label={t("usersPanel.removeAria", {
+                        username: u.username,
+                      })}
+                      title={t("usersPanel.removeAria", {
+                        username: u.username,
+                      })}
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

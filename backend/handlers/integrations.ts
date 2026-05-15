@@ -21,16 +21,13 @@ import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 import type { IntegrationsListResponse } from "../../shared/types.ts";
 import type { LarkBotManager } from "../lark/manager.ts";
 import { LarkAppMgmtError, publicView } from "../lark/appStore.ts";
-import { loadSettings, saveSettings } from "../lark/settings.ts";
-import { getUserRole } from "../auth/userStore.ts";
+import { getUserPermission, getUserRole } from "../auth/userStore.ts";
 
 export interface IntegrationsDeps {
   registry: IntegrationRegistry;
   codes: LinkCodeStore;
   /** Optional: present when admin lifecycle is enabled. */
   larkManager?: LarkBotManager;
-  /** Path to lark-settings.json — only meaningful with larkManager. */
-  larkSettingsPath?: string;
 }
 
 type CallerRole = "admin" | "user" | "open";
@@ -50,6 +47,23 @@ async function resolveRole(c: Context<ConfigContext>): Promise<CallerRole> {
   if (!user) return "open";
   const role = await getUserRole(usersFile, user);
   return role === "admin" ? "admin" : "user";
+}
+
+/**
+ * Whether the calling user is allowed to register / remove their own Lark
+ * app configurations. Admins and "open" callers always can; regular users
+ * are gated by the per-user `canManageLarkApps` flag set in the users file.
+ */
+async function canManageLarkApps(
+  c: Context<ConfigContext>,
+  role: CallerRole,
+): Promise<boolean> {
+  if (role === "admin" || role === "open") return true;
+  const usersFile = (c.var.config as { usersFile?: string } | undefined)
+    ?.usersFile;
+  const user = c.var.authUser;
+  if (!usersFile || !user) return false;
+  return getUserPermission(usersFile, user, "canManageLarkApps");
 }
 
 export async function handleListIntegrations(
@@ -100,45 +114,18 @@ export async function handleGetLarkSettings(
   c: Context<ConfigContext>,
   deps: IntegrationsDeps,
 ): Promise<Response> {
-  if (!deps.larkManager || !deps.larkSettingsPath) {
+  if (!deps.larkManager) {
     return c.json({ error: "Lark management not available" }, 404);
   }
   const user = c.var.authUser;
   if (!user) return c.json({ error: "Unauthorized" }, 401);
-  const settings = await loadSettings(deps.larkSettingsPath);
   const role = await resolveRole(c);
   // canManageApps tells the UI whether to show the add/remove controls for
-  // the calling user. Admins can always; regular users only when the global
-  // toggle is on.
-  const canManageApps =
-    role === "admin" || role === "open" || settings.allowUserApps;
-  return c.json({
-    allowUserApps: settings.allowUserApps,
-    canManageApps,
-    role,
-  });
-}
-
-export async function handlePutLarkSettings(
-  c: Context<ConfigContext>,
-  deps: IntegrationsDeps,
-): Promise<Response> {
-  if (!deps.larkManager || !deps.larkSettingsPath) {
-    return c.json({ error: "Lark management not available" }, 404);
-  }
-  let body: { allowUserApps?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON" }, 400);
-  }
-  const allowUserApps =
-    typeof body.allowUserApps === "boolean" ? body.allowUserApps : undefined;
-  if (allowUserApps === undefined) {
-    return c.json({ error: "Body must be { allowUserApps: boolean }" }, 400);
-  }
-  await saveSettings(deps.larkSettingsPath, { allowUserApps });
-  return c.json({ allowUserApps });
+  // the calling user. Admins (and open mode) always; regular users only
+  // when an admin has explicitly granted `canManageLarkApps` via
+  // /admin/users.
+  const canManageApps = await canManageLarkApps(c, role);
+  return c.json({ canManageApps, role });
 }
 
 export async function handleListLarkApps(
@@ -166,17 +153,17 @@ export async function handleAddLarkApp(
   c: Context<ConfigContext>,
   deps: IntegrationsDeps,
 ): Promise<Response> {
-  if (!deps.larkManager || !deps.larkSettingsPath) {
+  if (!deps.larkManager) {
     return c.json({ error: "Lark management not available" }, 404);
   }
   const user = c.var.authUser;
   if (!user) return c.json({ error: "Unauthorized" }, 401);
   const role = await resolveRole(c);
-  const settings = await loadSettings(deps.larkSettingsPath);
-  if (role === "user" && !settings.allowUserApps) {
+  if (!(await canManageLarkApps(c, role))) {
     return c.json(
       {
-        error: "Adding apps is not allowed for non-admin users on this server",
+        error:
+          "Adding apps is not allowed for your account. Ask an admin to grant the permission in /admin/users.",
       },
       403,
     );

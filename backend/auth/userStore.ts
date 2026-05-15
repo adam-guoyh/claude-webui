@@ -36,10 +36,21 @@ const SCRYPT_MAXMEM = 64 * 1024 * 1024;
 
 export type UserRole = "admin" | "user";
 
+export interface UserPermissions {
+  /**
+   * Whether the user may add/remove their own Feishu / Lark app configs from
+   * the Integrations page. Admins always can; for regular users this is an
+   * explicit admin-granted privilege (default false). Absent in the file =
+   * false.
+   */
+  canManageLarkApps?: boolean;
+}
+
 export interface StoredUser {
   username: string;
   passwordHash: string;
   role: UserRole;
+  permissions?: UserPermissions;
 }
 
 interface UserFile {
@@ -50,6 +61,7 @@ interface UserFile {
 export interface PublicUser {
   username: string;
   role: UserRole;
+  permissions: UserPermissions;
 }
 
 let cache: { path: string; mtime: number; users: StoredUser[] } | null = null;
@@ -107,13 +119,29 @@ async function verifyHash(password: string, stored: string): Promise<boolean> {
   }
 }
 
+function normalizePermissions(raw: unknown): UserPermissions | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const p = raw as Record<string, unknown>;
+  const out: UserPermissions = {};
+  if (typeof p.canManageLarkApps === "boolean") {
+    out.canManageLarkApps = p.canManageLarkApps;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function normalizeUser(raw: unknown): StoredUser | null {
   if (!raw || typeof raw !== "object") return null;
   const u = raw as Record<string, unknown>;
   if (typeof u.username !== "string") return null;
   if (typeof u.passwordHash !== "string") return null;
   const role: UserRole = u.role === "admin" ? "admin" : "user";
-  return { username: u.username, passwordHash: u.passwordHash, role };
+  const permissions = normalizePermissions(u.permissions);
+  return {
+    username: u.username,
+    passwordHash: u.passwordHash,
+    role,
+    ...(permissions ? { permissions } : {}),
+  };
 }
 
 async function loadFromDisk(path: string): Promise<StoredUser[]> {
@@ -157,7 +185,52 @@ export async function listUsers(path: string): Promise<PublicUser[]> {
   return (await getUsers(path)).map((u) => ({
     username: u.username,
     role: u.role,
+    permissions: u.permissions ?? {},
   }));
+}
+
+/**
+ * Look up a single permission for the given user. Returns `false` when the
+ * user doesn't exist or the file is unreadable — fail closed.
+ */
+export async function getUserPermission(
+  path: string,
+  username: string,
+  key: keyof UserPermissions,
+): Promise<boolean> {
+  const users = await getUsers(path);
+  const user = users.find((u) => u.username === username);
+  if (!user || !user.permissions) return false;
+  return user.permissions[key] === true;
+}
+
+export async function setUserPermissions(
+  path: string,
+  username: string,
+  patch: Partial<UserPermissions>,
+): Promise<UserPermissions> {
+  const users = await readUserFile(path);
+  const idx = users.findIndex((u) => u.username === username);
+  if (idx === -1) {
+    throw new UserMgmtError("not-found", `User ${username} not found`);
+  }
+  const current = users[idx].permissions ?? {};
+  const next: UserPermissions = { ...current };
+  if ("canManageLarkApps" in patch) {
+    if (patch.canManageLarkApps === true) next.canManageLarkApps = true;
+    else delete next.canManageLarkApps;
+  }
+  users[idx] = {
+    ...users[idx],
+    ...(Object.keys(next).length > 0 ? { permissions: next } : {}),
+  };
+  // When no flags remain, drop the `permissions` key entirely to keep the
+  // file tidy.
+  if (Object.keys(next).length === 0) {
+    delete (users[idx] as { permissions?: UserPermissions }).permissions;
+  }
+  await writeUserFile(path, users);
+  return next;
 }
 
 export async function getUserRole(
@@ -242,7 +315,7 @@ export async function addUser(
   const passwordHash = await hashPassword(password);
   users.push({ username, passwordHash, role });
   await writeUserFile(path, users);
-  return { username, role };
+  return { username, role, permissions: {} };
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   listUsers,
   removeUser,
   resetPassword,
+  setUserPermissions,
   verifyCredentials,
   type UserRole,
 } from "./auth/userStore.ts";
@@ -51,7 +52,6 @@ import {
   handleIssueLinkCode,
   handleListIntegrations,
   handleListLarkApps,
-  handlePutLarkSettings,
   handleRemoveBinding,
   handleRemoveLarkApp,
   type IntegrationsDeps,
@@ -246,6 +246,32 @@ export function createApp(
     }
   });
 
+  app.put("/api/users/:username/permissions", async (c) => {
+    const check = await requireAdmin(c.var.authUser);
+    if (!check.ok) return c.json({ error: check.error }, check.status);
+    const target = c.req.param("username");
+    let body: { canManageLarkApps?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON" }, 400);
+    }
+    if (typeof body.canManageLarkApps !== "boolean") {
+      return c.json(
+        { error: "Body must be { canManageLarkApps: boolean }" },
+        400,
+      );
+    }
+    try {
+      const permissions = await setUserPermissions(config.usersFile!, target, {
+        canManageLarkApps: body.canManageLarkApps,
+      });
+      return c.json({ username: target, permissions });
+    } catch (err) {
+      return mgmtError(c, err);
+    }
+  });
+
   app.put("/api/users/:username/password", async (c) => {
     // Admins can reset anyone's password. Regular users can reset only their
     // own (and only when the request body provides the new password). We don't
@@ -315,13 +341,6 @@ export function createApp(
   // there is no "self" to bind. Returns 404 otherwise.
   if (config.integrations && config.usersFile) {
     const deps = config.integrations;
-    const requireAdminGate = async (
-      c: Context<ConfigContext>,
-    ): Promise<Response | null> => {
-      const check = await requireAdmin(c.var.authUser);
-      if (!check.ok) return c.json({ error: check.error }, check.status);
-      return null;
-    };
 
     app.get("/api/integrations", (c) => handleListIntegrations(c, deps));
     app.post("/api/integrations/:provider/code", (c) =>
@@ -334,23 +353,21 @@ export function createApp(
     // Lark provider app management. The handlers themselves enforce
     // role-based access:
     //  - admins / open mode: full CRUD over any app
-    //  - users: read all + manage their own apps, gated by the
-    //    `allowUserApps` setting
+    //  - users: read all + manage their own apps when their
+    //    `canManageLarkApps` permission is granted (admin-set in
+    //    /admin/users)
     app.get("/api/integrations/lark/apps", (c) => handleListLarkApps(c, deps));
     app.post("/api/integrations/lark/apps", (c) => handleAddLarkApp(c, deps));
     app.delete("/api/integrations/lark/apps/:id", (c) =>
       handleRemoveLarkApp(c, deps),
     );
-    // Settings: read is open to authenticated callers (UI uses it to know
-    // whether to show the management form); write is admin only.
+    // Settings: read returns `{canManageApps, role}` for the calling user
+    // — the UI uses it to decide whether to show the add/remove form. The
+    // actual per-user permission lives in the users file and is mutated
+    // via /api/users/:username/permissions.
     app.get("/api/integrations/lark/settings", (c) =>
       handleGetLarkSettings(c, deps),
     );
-    app.put("/api/integrations/lark/settings", async (c) => {
-      const block = await requireAdminGate(c);
-      if (block) return block;
-      return handlePutLarkSettings(c, deps);
-    });
   } else {
     app.get("/api/integrations", (c) =>
       c.json({ error: "Integrations not available" }, 404),

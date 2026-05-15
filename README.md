@@ -178,7 +178,7 @@ Once signed in as admin, open the avatar menu → **Integrations** → top card 
 - Empty owner → **shared**: admin-managed, every webui user can `/link` via that bot.
 - Username owner → **personal**: only that user manages it from their own Integrations page.
 
-Admins can toggle **"Allow non-admin users to register their own apps"** on the same page. When it's on, regular users see the same add/remove form; their new apps are automatically owned by themselves and they can only delete what they own. The toggle is off by default, so a fresh install behaves admin-only.
+Admins decide **per user** who's allowed to register their own apps. Open `/admin/users` → there's a `Lark apps` checkbox on each row. When checked, that user sees the add/remove form on the Integrations page and their new apps are automatically owned by themselves; they can only delete what they own. Default: off for new users, so a fresh install behaves admin-only.
 
 The bot opens a websocket per app to Feishu, so the backend host needs outbound HTTPS but no inbound port.
 
@@ -227,10 +227,11 @@ GET    /api/auth/check          gated; returns { user, role }
 Users (admin only, multi-user mode):
 
 ```
-GET    /api/users                                        → { users: [{ username, role }] }
+GET    /api/users                                        → { users: [{ username, role, permissions }] }
 POST   /api/users               { username, password, role? }
 DELETE /api/users/:username
-PUT    /api/users/:username/password    { password }     (admin OR self)
+PUT    /api/users/:username/password       { password }              (admin OR self)
+PUT    /api/users/:username/permissions    { canManageLarkApps }     (admin only)
 ```
 
 Projects:
@@ -273,11 +274,10 @@ Integrations — Feishu / Lark app management:
 GET    /api/integrations/lark/apps                              → { apps: [{ id, appId, domain, displayName?, owner?, running, canManage, createdAt }] }
 POST   /api/integrations/lark/apps     { appId, appSecret, domain?, displayName?, owner? }
 DELETE /api/integrations/lark/apps/:id
-GET    /api/integrations/lark/settings                          → { allowUserApps, canManageApps, role }
-PUT    /api/integrations/lark/settings  { allowUserApps }       (admin only)
+GET    /api/integrations/lark/settings                          → { canManageApps, role }
 ```
 
-`canManage` (per row) tells the UI which apps the caller may delete. Admins can pass `owner` on POST to set an app's owner (or leave undefined for shared); regular users always get `owner = self` and the field is ignored. Non-admin POST/DELETE are gated by `allowUserApps`.
+`canManage` (per row) tells the UI which apps the caller may delete. Admins can pass `owner` on POST to set an app's owner (or leave undefined for shared); regular users always get `owner = self` and the field is ignored. Non-admin POST/DELETE are gated by each user's `canManageLarkApps` permission (set per-user via `PUT /api/users/:username/permissions`).
 
 All `/api/*` requests (except `/api/auth/status` and `/api/auth/login` in multi-user mode) require `Authorization: Bearer <session-or-shared-token>`.
 

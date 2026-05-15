@@ -125,9 +125,7 @@
     "appOwnerHint": "Admin: empty = shared (everyone can /link); username = personal to that user",
     "appOwnerShared": "shared",
     "appOwnerOf": "owner: {{name}}",
-    "allowUserAppsLabel": "Allow non-admin users to register their own apps",
-    "allowUserAppsHint": "Off: only admins manage apps. On: each user can add/remove their own.",
-    "settingsSaveFailed": "Failed to save settings",
+    "userPermHint": "Grant individual users the right to register their own apps in /admin/users (column ‘Lark apps’).",
     "domainFeishu": "Feishu (China)",
     "domainLark": "Lark (international)"
   },
@@ -155,7 +153,9 @@
     "roleUser": "user",
     "you": "you",
     "removeAria": "Remove {{username}}",
-    "confirmDelete": "Remove user {{username}}?"
+    "confirmDelete": "Remove user {{username}}?",
+    "larkAppsPermLabel": "Lark apps",
+    "larkAppsPermHint": "When checked, this user can register / remove their own Feishu / Lark apps on the Integrations page. Admins always can."
   },
   "settings": {
     "title": "Settings",
