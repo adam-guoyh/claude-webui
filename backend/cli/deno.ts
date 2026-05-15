@@ -17,6 +17,7 @@ import { defaultAppsPath as defaultLarkAppsPath } from "../lark/appStore.ts";
 import { IntegrationRegistry } from "../integrations/registry.ts";
 import { LinkCodeStore } from "../integrations/linkCodes.ts";
 import { createLarkProvider } from "../integrations/larkProvider.ts";
+import { createQqProvider } from "../integrations/qqProvider.ts";
 import { getHomeDir } from "../utils/os.ts";
 import { dirname, fromFileUrl, join } from "@std/path";
 import { exit } from "../utils/os.ts";
@@ -49,6 +50,9 @@ async function main(runtime: DenoRuntime) {
       appsFilePath: larkAppsPath,
     }),
   );
+  // Stub provider — surfaces "QQ" in the admin user-permission UI and on
+  // the Integrations page so the multi-provider design is visible.
+  integrationRegistry.register(createQqProvider());
 
   let larkManager: LarkBotManager | undefined;
   if (args.usersFile) {

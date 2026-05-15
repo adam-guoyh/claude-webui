@@ -8,6 +8,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../utils/authFetch";
 import { getApiUrl } from "../config/api";
+import { providerLabel } from "../utils/providerName";
 import { useAuth } from "../hooks/useAuth";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
@@ -319,7 +320,7 @@ export function AdminUsersPage() {
                                   ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
                                   : "text-slate-600 dark:text-slate-300 cursor-pointer"
                               }`}
-                              title={p.displayName}
+                              title={providerLabel(t, p.id, p.displayName)}
                             >
                               <input
                                 type="checkbox"
@@ -334,7 +335,9 @@ export function AdminUsersPage() {
                                 }
                                 className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                               />
-                              <span>{p.displayName}</span>
+                              <span>
+                                {providerLabel(t, p.id, p.displayName)}
+                              </span>
                             </label>
                           );
                         })}

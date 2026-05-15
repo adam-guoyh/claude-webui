@@ -18,6 +18,7 @@ import { defaultAppsPath as defaultLarkAppsPath } from "../lark/appStore.ts";
 import { IntegrationRegistry } from "../integrations/registry.ts";
 import { LinkCodeStore } from "../integrations/linkCodes.ts";
 import { createLarkProvider } from "../integrations/larkProvider.ts";
+import { createQqProvider } from "../integrations/qqProvider.ts";
 import { getHomeDir } from "../utils/os.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -56,6 +57,10 @@ async function main(runtime: NodeRuntime) {
       appsFilePath: larkAppsPath,
     }),
   );
+  // Stub provider — surfaces "QQ" in the admin user-permission UI and on
+  // the Integrations page so the multi-provider design is visible.
+  // Replace with a real provider implementation when wiring the QQ bot.
+  integrationRegistry.register(createQqProvider());
 
   // Lark bot manager: hot-add / hot-remove app connections from the admin
   // UI. Only meaningful in multi-user mode (admin endpoints are gated to

@@ -81,6 +81,11 @@
     "integrations": "应用绑定"
   },
   "integrations": {
+    "providerName": {
+      "lark": "飞书",
+      "qq": "QQ"
+    },
+    "providerPreview": "预览 — 后端 bot 连接尚未接入,框架已就绪",
     "title": "应用绑定",
     "backAria": "返回项目列表",
     "subtitle": "将一个 IM 账号(飞书 / Lark / 微信 / QQ 等)绑定到当前 webui 用户。",

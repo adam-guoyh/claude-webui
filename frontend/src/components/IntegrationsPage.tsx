@@ -10,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../utils/authFetch";
 import { getApiUrl } from "../config/api";
+import { providerLabel } from "../utils/providerName";
 import { useAuth } from "../hooks/useAuth";
 import { LarkAppAdmin } from "./LarkAppAdmin";
 import { SettingsButton } from "./SettingsButton";
@@ -237,7 +238,7 @@ function ProviderCard({
       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            {provider.displayName}
+            {providerLabel(t, provider.id, provider.displayName)}
           </div>
           {!provider.enabled && (
             <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
@@ -264,7 +265,7 @@ function ProviderCard({
         <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border-b border-slate-200 dark:border-slate-700">
           <div className="text-xs text-slate-600 dark:text-slate-300 mb-2">
             {t("integrations.codeInstructions", {
-              provider: provider.displayName,
+              provider: providerLabel(t, provider.id, provider.displayName),
               minutes,
             })}
           </div>

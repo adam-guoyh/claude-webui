@@ -81,6 +81,11 @@
     "integrations": "Integrations"
   },
   "integrations": {
+    "providerName": {
+      "lark": "Feishu / Lark",
+      "qq": "QQ"
+    },
+    "providerPreview": "preview — backend bot integration is not yet wired",
     "title": "Integrations",
     "backAria": "Back to projects",
     "subtitle": "Link an IM account (Feishu / Lark / WeChat / QQ / …) to this webui user.",
