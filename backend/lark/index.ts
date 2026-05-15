@@ -118,7 +118,23 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
       const chatId = ev?.message?.chat_id;
       const content = ev?.message?.content;
       const type = ev?.message?.message_type;
-      if (!openId || !chatId || !content) return;
+      logger.cli.debug(
+        "Lark event received [{app}]: type={type} openId={openId} chatId={chatId} hasContent={hasContent}",
+        {
+          app: label,
+          type: type ?? "(missing)",
+          openId: openId ?? "(missing)",
+          chatId: chatId ?? "(missing)",
+          hasContent: Boolean(content),
+        },
+      );
+      if (!openId || !chatId || !content) {
+        logger.cli.debug(
+          "Lark event dropped [{app}]: missing required field(s)",
+          { app: label },
+        );
+        return;
+      }
       if (type !== "text") {
         await sendText(
           chatId,
@@ -127,6 +143,11 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
         return;
       }
       const text = extractText(content);
+      logger.cli.debug("Lark text extracted [{app}]: {len} chars: {preview}", {
+        app: label,
+        len: text.length,
+        preview: text.length > 80 ? text.slice(0, 80) + "…" : text,
+      });
       await handleLarkMessage({ openId, chatId, text }, handlerConfig);
     },
   });

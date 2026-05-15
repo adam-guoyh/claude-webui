@@ -99,6 +99,16 @@ export async function handleLarkMessage(
     ? binding.username
     : `pending:${cfg.appId}:${msg.openId}`;
 
+  logger.cli.debug(
+    "Lark dispatch [{app}]: openId={openId} bound={bound} text={preview}",
+    {
+      app: cfg.appId,
+      openId: msg.openId,
+      bound: binding ? binding.username : "(none)",
+      preview: trimmed.length > 60 ? trimmed.slice(0, 60) + "…" : trimmed,
+    },
+  );
+
   await serializePerUser(lockKey, async () => {
     try {
       if (trimmed === "" || trimmed === "/help") {
