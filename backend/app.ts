@@ -47,9 +47,11 @@ import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
 import {
   handleAddLarkApp,
+  handleGetLarkSettings,
   handleIssueLinkCode,
   handleListIntegrations,
   handleListLarkApps,
+  handlePutLarkSettings,
   handleRemoveBinding,
   handleRemoveLarkApp,
   type IntegrationsDeps,
@@ -329,23 +331,25 @@ export function createApp(
       handleRemoveBinding(c, deps),
     );
 
-    // Admin-only app management for the Lark provider. Adding an app
-    // hot-starts a websocket; removing one stops it. Both persist to
-    // ~/.claude-webui/lark-apps.json.
-    app.get("/api/integrations/lark/apps", async (c) => {
+    // Lark provider app management. The handlers themselves enforce
+    // role-based access:
+    //  - admins / open mode: full CRUD over any app
+    //  - users: read all + manage their own apps, gated by the
+    //    `allowUserApps` setting
+    app.get("/api/integrations/lark/apps", (c) => handleListLarkApps(c, deps));
+    app.post("/api/integrations/lark/apps", (c) => handleAddLarkApp(c, deps));
+    app.delete("/api/integrations/lark/apps/:id", (c) =>
+      handleRemoveLarkApp(c, deps),
+    );
+    // Settings: read is open to authenticated callers (UI uses it to know
+    // whether to show the management form); write is admin only.
+    app.get("/api/integrations/lark/settings", (c) =>
+      handleGetLarkSettings(c, deps),
+    );
+    app.put("/api/integrations/lark/settings", async (c) => {
       const block = await requireAdminGate(c);
       if (block) return block;
-      return handleListLarkApps(c, deps);
-    });
-    app.post("/api/integrations/lark/apps", async (c) => {
-      const block = await requireAdminGate(c);
-      if (block) return block;
-      return handleAddLarkApp(c, deps);
-    });
-    app.delete("/api/integrations/lark/apps/:id", async (c) => {
-      const block = await requireAdminGate(c);
-      if (block) return block;
-      return handleRemoveLarkApp(c, deps);
+      return handlePutLarkSettings(c, deps);
     });
   } else {
     app.get("/api/integrations", (c) =>

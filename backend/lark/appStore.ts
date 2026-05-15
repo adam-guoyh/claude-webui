@@ -25,6 +25,13 @@ export interface LarkAppRecord {
   domain: "feishu" | "lark";
   /** Optional human-friendly label rendered in the admin UI. */
   displayName?: string;
+  /**
+   * Webui username that "owns" this app config.
+   * - `undefined` → shared (admin-managed); any user can /link via the bot
+   * - `"alice"` → personal to alice; she manages it, anyone else can still
+   *   DM the bot but it just keeps appId distinct in bindings
+   */
+  owner?: string;
   createdAt: string;
 }
 
@@ -33,6 +40,7 @@ export interface PublicLarkApp {
   appId: string;
   domain: "feishu" | "lark";
   displayName?: string;
+  owner?: string;
   createdAt: string;
 }
 
@@ -42,6 +50,7 @@ export function publicView(record: LarkAppRecord): PublicLarkApp {
     appId: record.appId,
     domain: record.domain,
     displayName: record.displayName,
+    owner: record.owner,
     createdAt: record.createdAt,
   };
 }
@@ -79,6 +88,7 @@ async function loadFromDisk(path: string): Promise<LarkAppRecord[]> {
         domain,
         displayName:
           typeof rec.displayName === "string" ? rec.displayName : undefined,
+        owner: typeof rec.owner === "string" ? rec.owner : undefined,
         createdAt:
           typeof rec.createdAt === "string"
             ? rec.createdAt
@@ -111,6 +121,8 @@ export interface AddAppInput {
   appSecret: string;
   domain?: "feishu" | "lark";
   displayName?: string;
+  /** Pass undefined for a shared (admin-managed) app. */
+  owner?: string;
 }
 
 export class LarkAppMgmtError extends Error {
@@ -141,6 +153,7 @@ export async function addApp(
     appSecret,
     domain: input.domain ?? "feishu",
     displayName: input.displayName?.trim() || undefined,
+    owner: input.owner?.trim() || undefined,
     createdAt: new Date().toISOString(),
   };
   existing.push(record);

@@ -91,18 +91,21 @@ export interface IntegrationCodeResponse {
 }
 
 /**
- * Admin-only payload listing the persisted Feishu / Lark app configs
- * the backend is currently running. `appSecret` is never sent — operators
- * who need it should look at the file directly.
+ * Public listing payload for a registered Feishu / Lark app. `appSecret`
+ * is never sent — operators who need it should look at the file directly.
+ * `owner` is undefined for shared (admin-managed) apps.
  */
 export interface LarkAppPublic {
   id: string;
   appId: string;
   domain: "feishu" | "lark";
   displayName?: string;
+  owner?: string;
   createdAt: string;
   /** True when the WSClient for this app is currently active. */
   running: boolean;
+  /** Whether the calling user is allowed to remove this app. */
+  canManage: boolean;
 }
 
 export interface LarkAppsResponse {
@@ -114,6 +117,15 @@ export interface LarkAppCreateRequest {
   appSecret: string;
   domain?: "feishu" | "lark";
   displayName?: string;
+  /** Only honored for admins; users always get owner=self. */
+  owner?: string | null;
+}
+
+export interface LarkSettingsResponse {
+  allowUserApps: boolean;
+  /** Convenience flag derived from role + allowUserApps. */
+  canManageApps: boolean;
+  role: "admin" | "user" | "open";
 }
 
 // Conversation history types

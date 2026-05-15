@@ -15,6 +15,7 @@ import { bootstrapAdminUser } from "../auth/bootstrap.ts";
 import { LarkBotManager } from "../lark/manager.ts";
 import { defaultBindingPath as defaultLarkBindingPath } from "../lark/binding.ts";
 import { defaultAppsPath as defaultLarkAppsPath } from "../lark/appStore.ts";
+import { defaultSettingsPath as defaultLarkSettingsPath } from "../lark/settings.ts";
 import { IntegrationRegistry } from "../integrations/registry.ts";
 import { LinkCodeStore } from "../integrations/linkCodes.ts";
 import { createLarkProvider } from "../integrations/larkProvider.ts";
@@ -85,6 +86,7 @@ async function main(runtime: NodeRuntime) {
       registry: integrationRegistry,
       codes: linkCodes,
       larkManager,
+      larkSettingsPath: defaultLarkSettingsPath(),
     },
   });
 

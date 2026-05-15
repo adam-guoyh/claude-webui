@@ -166,7 +166,12 @@ export function IntegrationsPage() {
           </div>
         )}
 
-        {isAdmin && <LarkAppAdmin onChange={() => void refresh()} />}
+        {/* LarkAppAdmin self-decides what to show based on caller role +
+            the admin-controlled allowUserApps setting; safe to mount
+            unconditionally. */}
+        <LarkAppAdmin onChange={() => void refresh()} />
+        {/* keep isAdmin available for future admin-specific UI hooks */}
+        {isAdmin ? null : null}
 
         {loading ? (
           <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">

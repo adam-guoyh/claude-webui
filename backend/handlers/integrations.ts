@@ -4,6 +4,14 @@
  * `listIntegrations` returns every registered provider plus the calling
  * user's bindings, so the UI can render "Feishu (bound as X / not bound)"
  * without provider-specific code.
+ *
+ * Lark app management is split into two roles:
+ *  - admins can add/remove any app (shared or owned by anyone)
+ *  - regular users can add/remove only their own apps, and only when the
+ *    `allowUserApps` setting is true (admin-controlled)
+ *
+ * The list endpoint is open to any authenticated user — both roles need to
+ * see what bots exist so they can pick which one to /link with.
  */
 
 import type { Context } from "hono";
@@ -13,12 +21,35 @@ import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 import type { IntegrationsListResponse } from "../../shared/types.ts";
 import type { LarkBotManager } from "../lark/manager.ts";
 import { LarkAppMgmtError, publicView } from "../lark/appStore.ts";
+import { loadSettings, saveSettings } from "../lark/settings.ts";
+import { getUserRole } from "../auth/userStore.ts";
 
 export interface IntegrationsDeps {
   registry: IntegrationRegistry;
   codes: LinkCodeStore;
   /** Optional: present when admin lifecycle is enabled. */
   larkManager?: LarkBotManager;
+  /** Path to lark-settings.json — only meaningful with larkManager. */
+  larkSettingsPath?: string;
+}
+
+type CallerRole = "admin" | "user" | "open";
+
+/**
+ * Resolve the caller's role for app management.
+ *
+ * - `open`: auth disabled / shared-token / no users file → effectively admin
+ *   (legacy single-user setups)
+ * - `admin` / `user`: as recorded in the users file
+ */
+async function resolveRole(c: Context<ConfigContext>): Promise<CallerRole> {
+  const usersFile = (c.var.config as { usersFile?: string } | undefined)
+    ?.usersFile;
+  if (!usersFile) return "open";
+  const user = c.var.authUser;
+  if (!user) return "open";
+  const role = await getUserRole(usersFile, user);
+  return role === "admin" ? "admin" : "user";
 }
 
 export async function handleListIntegrations(
@@ -65,6 +96,51 @@ export async function handleIssueLinkCode(
   });
 }
 
+export async function handleGetLarkSettings(
+  c: Context<ConfigContext>,
+  deps: IntegrationsDeps,
+): Promise<Response> {
+  if (!deps.larkManager || !deps.larkSettingsPath) {
+    return c.json({ error: "Lark management not available" }, 404);
+  }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const settings = await loadSettings(deps.larkSettingsPath);
+  const role = await resolveRole(c);
+  // canManageApps tells the UI whether to show the add/remove controls for
+  // the calling user. Admins can always; regular users only when the global
+  // toggle is on.
+  const canManageApps =
+    role === "admin" || role === "open" || settings.allowUserApps;
+  return c.json({
+    allowUserApps: settings.allowUserApps,
+    canManageApps,
+    role,
+  });
+}
+
+export async function handlePutLarkSettings(
+  c: Context<ConfigContext>,
+  deps: IntegrationsDeps,
+): Promise<Response> {
+  if (!deps.larkManager || !deps.larkSettingsPath) {
+    return c.json({ error: "Lark management not available" }, 404);
+  }
+  let body: { allowUserApps?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const allowUserApps =
+    typeof body.allowUserApps === "boolean" ? body.allowUserApps : undefined;
+  if (allowUserApps === undefined) {
+    return c.json({ error: "Body must be { allowUserApps: boolean }" }, 400);
+  }
+  await saveSettings(deps.larkSettingsPath, { allowUserApps });
+  return c.json({ allowUserApps });
+}
+
 export async function handleListLarkApps(
   c: Context<ConfigContext>,
   deps: IntegrationsDeps,
@@ -72,11 +148,16 @@ export async function handleListLarkApps(
   if (!deps.larkManager) {
     return c.json({ error: "Lark management not available" }, 404);
   }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const role = await resolveRole(c);
   const records = await deps.larkManager.list();
   return c.json({
     apps: records.map((r) => ({
       ...publicView(r),
       running: deps.larkManager!.isRunning(r.id),
+      /** Whether the caller can delete this app. */
+      canManage: role === "admin" || role === "open" || r.owner === user,
     })),
   });
 }
@@ -85,14 +166,28 @@ export async function handleAddLarkApp(
   c: Context<ConfigContext>,
   deps: IntegrationsDeps,
 ): Promise<Response> {
-  if (!deps.larkManager) {
+  if (!deps.larkManager || !deps.larkSettingsPath) {
     return c.json({ error: "Lark management not available" }, 404);
+  }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const role = await resolveRole(c);
+  const settings = await loadSettings(deps.larkSettingsPath);
+  if (role === "user" && !settings.allowUserApps) {
+    return c.json(
+      {
+        error: "Adding apps is not allowed for non-admin users on this server",
+      },
+      403,
+    );
   }
   let body: {
     appId?: unknown;
     appSecret?: unknown;
     domain?: unknown;
     displayName?: unknown;
+    /** Only admins may set this; otherwise the caller becomes the owner. */
+    owner?: unknown;
   };
   try {
     body = await c.req.json();
@@ -108,12 +203,25 @@ export async function handleAddLarkApp(
   if (!appId || !appSecret) {
     return c.json({ error: "appId and appSecret are required" }, 400);
   }
+  // Resolve final owner:
+  //  - regular user: always self (regardless of what they sent)
+  //  - admin/open: respect body.owner (string = personal-to-someone,
+  //    null/empty/missing = shared)
+  let owner: string | undefined;
+  if (role === "user") {
+    owner = user;
+  } else if (typeof body.owner === "string" && body.owner.trim()) {
+    owner = body.owner.trim();
+  } else {
+    owner = undefined;
+  }
   try {
     const record = await deps.larkManager.add({
       appId,
       appSecret,
       domain,
       displayName,
+      owner,
     });
     return c.json({ app: { ...publicView(record), running: true } }, 201);
   } catch (err) {
@@ -137,8 +245,20 @@ export async function handleRemoveLarkApp(
   if (!deps.larkManager) {
     return c.json({ error: "Lark management not available" }, 404);
   }
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
   const id = c.req.param("id");
   if (!id) return c.json({ error: "Missing id" }, 400);
+  const role = await resolveRole(c);
+  if (role === "user") {
+    // Regular users can only remove apps they own.
+    const records = await deps.larkManager.list();
+    const target = records.find((r) => r.id === id);
+    if (!target) return c.json({ error: "App not found" }, 404);
+    if (target.owner !== user) {
+      return c.json({ error: "You can only remove your own apps" }, 403);
+    }
+  }
   try {
     await deps.larkManager.remove(id);
     return c.json({ ok: true });
