@@ -15,13 +15,19 @@ import { UserMenu } from "./UserMenu";
 import type { UserRole } from "../contexts/AuthContextTypes";
 
 interface UserPermissions {
-  canManageLarkApps?: boolean;
+  /** Provider ids the user is allowed to manage their own apps for. */
+  manageApps?: string[];
 }
 
 interface ListedUser {
   username: string;
   role: UserRole;
   permissions: UserPermissions;
+}
+
+interface ProviderSummary {
+  id: string;
+  displayName: string;
 }
 
 /**
@@ -34,6 +40,7 @@ export function AdminUsersPage() {
   const navigate = useNavigate();
   const { username: currentUser } = useAuth();
   const [users, setUsers] = useState<ListedUser[]>([]);
+  const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -48,10 +55,23 @@ export function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(getApiUrl("/api/users"));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { users: ListedUser[] };
-      setUsers(body.users);
+      const [usersRes, intRes] = await Promise.all([
+        authFetch(getApiUrl("/api/users")),
+        authFetch(getApiUrl("/api/integrations")),
+      ]);
+      if (!usersRes.ok) throw new Error(`HTTP ${usersRes.status}`);
+      const usersBody = (await usersRes.json()) as { users: ListedUser[] };
+      setUsers(usersBody.users);
+      // Providers list is best-effort — the admin page is still useful
+      // even if it fails (we just won't render permission toggles).
+      if (intRes.ok) {
+        const intBody = (await intRes.json()) as {
+          providers: ProviderSummary[];
+        };
+        setProviders(intBody.providers);
+      } else {
+        setProviders([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users");
     } finally {
@@ -120,31 +140,35 @@ export function AdminUsersPage() {
     }
   };
 
-  const handleToggleLarkPerm = async (
+  const handleToggleProviderPerm = async (
     username: string,
+    providerId: string,
     next: boolean,
   ): Promise<void> => {
     setError(null);
+    const target = users.find((u) => u.username === username);
+    const current = new Set(target?.permissions.manageApps ?? []);
+    if (next) current.add(providerId);
+    else current.delete(providerId);
+    const nextList = Array.from(current);
     // Optimistic update so the checkbox doesn't lag the API round-trip.
     setUsers((prev) =>
       prev.map((u) =>
         u.username === username
           ? {
               ...u,
-              permissions: { ...u.permissions, canManageLarkApps: next },
+              permissions: { ...u.permissions, manageApps: nextList },
             }
           : u,
       ),
     );
     try {
       const res = await authFetch(
-        getApiUrl(
-          `/api/users/${encodeURIComponent(username)}/permissions`,
-        ),
+        getApiUrl(`/api/users/${encodeURIComponent(username)}/permissions`),
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ canManageLarkApps: next }),
+          body: JSON.stringify({ manageApps: nextList }),
         },
       );
       if (!res.ok) {
@@ -275,32 +299,47 @@ export function AdminUsersPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <label
-                      className={`flex items-center gap-1.5 text-xs select-none ${
-                        u.role === "admin"
-                          ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                          : "text-slate-600 dark:text-slate-300 cursor-pointer"
-                      }`}
-                      title={t("usersPanel.larkAppsPermHint")}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={
-                          u.role === "admin"
-                            ? true
-                            : !!u.permissions.canManageLarkApps
-                        }
-                        disabled={u.role === "admin"}
-                        onChange={(e) =>
-                          void handleToggleLarkPerm(
-                            u.username,
-                            e.target.checked,
-                          )
-                        }
-                        className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                      />
-                      <span>{t("usersPanel.larkAppsPermLabel")}</span>
-                    </label>
+                    {providers.length > 0 && (
+                      <div
+                        className="flex items-center gap-2 shrink-0"
+                        title={t("usersPanel.manageAppsHint")}
+                      >
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          {t("usersPanel.manageAppsLabel")}
+                        </span>
+                        {providers.map((p) => {
+                          const granted =
+                            u.role === "admin" ||
+                            (u.permissions.manageApps ?? []).includes(p.id);
+                          return (
+                            <label
+                              key={p.id}
+                              className={`flex items-center gap-1 text-xs select-none ${
+                                u.role === "admin"
+                                  ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                                  : "text-slate-600 dark:text-slate-300 cursor-pointer"
+                              }`}
+                              title={p.displayName}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={granted}
+                                disabled={u.role === "admin"}
+                                onChange={(e) =>
+                                  void handleToggleProviderPerm(
+                                    u.username,
+                                    p.id,
+                                    e.target.checked,
+                                  )
+                                }
+                                className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                              />
+                              <span>{p.displayName}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                     <button
                       onClick={() => void handleDelete(u.username)}
                       disabled={u.username === currentUser}

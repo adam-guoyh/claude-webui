@@ -21,7 +21,7 @@ import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 import type { IntegrationsListResponse } from "../../shared/types.ts";
 import type { LarkBotManager } from "../lark/manager.ts";
 import { LarkAppMgmtError, publicView } from "../lark/appStore.ts";
-import { getUserPermission, getUserRole } from "../auth/userStore.ts";
+import { canManageProviderApps, getUserRole } from "../auth/userStore.ts";
 
 export interface IntegrationsDeps {
   registry: IntegrationRegistry;
@@ -50,20 +50,22 @@ async function resolveRole(c: Context<ConfigContext>): Promise<CallerRole> {
 }
 
 /**
- * Whether the calling user is allowed to register / remove their own Lark
- * app configurations. Admins and "open" callers always can; regular users
- * are gated by the per-user `canManageLarkApps` flag set in the users file.
+ * Whether the calling user is allowed to register / remove their own apps
+ * for a given integration provider. Admins and "open" callers always can;
+ * regular users are gated by their `manageApps` allowlist in the users
+ * file.
  */
-async function canManageLarkApps(
+async function canManageProvider(
   c: Context<ConfigContext>,
   role: CallerRole,
+  providerId: string,
 ): Promise<boolean> {
   if (role === "admin" || role === "open") return true;
   const usersFile = (c.var.config as { usersFile?: string } | undefined)
     ?.usersFile;
   const user = c.var.authUser;
   if (!usersFile || !user) return false;
-  return getUserPermission(usersFile, user, "canManageLarkApps");
+  return canManageProviderApps(usersFile, user, providerId);
 }
 
 export async function handleListIntegrations(
@@ -124,7 +126,7 @@ export async function handleGetLarkSettings(
   // the calling user. Admins (and open mode) always; regular users only
   // when an admin has explicitly granted `canManageLarkApps` via
   // /admin/users.
-  const canManageApps = await canManageLarkApps(c, role);
+  const canManageApps = await canManageProvider(c, role, "lark");
   return c.json({ canManageApps, role });
 }
 
@@ -159,7 +161,7 @@ export async function handleAddLarkApp(
   const user = c.var.authUser;
   if (!user) return c.json({ error: "Unauthorized" }, 401);
   const role = await resolveRole(c);
-  if (!(await canManageLarkApps(c, role))) {
+  if (!(await canManageProvider(c, role, "lark"))) {
     return c.json(
       {
         error:

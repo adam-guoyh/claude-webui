@@ -178,7 +178,7 @@ Once signed in as admin, open the avatar menu → **Integrations** → top card 
 - Empty owner → **shared**: admin-managed, every webui user can `/link` via that bot.
 - Username owner → **personal**: only that user manages it from their own Integrations page.
 
-Admins decide **per user** who's allowed to register their own apps. Open `/admin/users` → there's a `Lark apps` checkbox on each row. When checked, that user sees the add/remove form on the Integrations page and their new apps are automatically owned by themselves; they can only delete what they own. Default: off for new users, so a fresh install behaves admin-only.
+Admins decide **per user** who's allowed to register their own apps. Open `/admin/users` → each row has an `App access` group with one checkbox per registered integration provider (currently just `Feishu / Lark`; adding WeChat/QQ later would add more boxes here without any UI change). When a box is checked, that user sees the add/remove form on the Integrations page for that provider and their new apps are automatically owned by themselves; they can only delete what they own. Default: nothing checked for new users, so a fresh install behaves admin-only.
 
 The bot opens a websocket per app to Feishu, so the backend host needs outbound HTTPS but no inbound port.
 
@@ -231,7 +231,7 @@ GET    /api/users                                        → { users: [{ usernam
 POST   /api/users               { username, password, role? }
 DELETE /api/users/:username
 PUT    /api/users/:username/password       { password }              (admin OR self)
-PUT    /api/users/:username/permissions    { canManageLarkApps }     (admin only)
+PUT    /api/users/:username/permissions    { manageApps: string[] }  (admin only — provider ids the user may manage own apps for)
 ```
 
 Projects:

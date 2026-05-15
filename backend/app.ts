@@ -250,21 +250,21 @@ export function createApp(
     const check = await requireAdmin(c.var.authUser);
     if (!check.ok) return c.json({ error: check.error }, check.status);
     const target = c.req.param("username");
-    let body: { canManageLarkApps?: unknown };
+    let body: { manageApps?: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json({ error: "Invalid JSON" }, 400);
     }
-    if (typeof body.canManageLarkApps !== "boolean") {
-      return c.json(
-        { error: "Body must be { canManageLarkApps: boolean }" },
-        400,
-      );
+    if (
+      !Array.isArray(body.manageApps) ||
+      !body.manageApps.every((v) => typeof v === "string")
+    ) {
+      return c.json({ error: "Body must be { manageApps: string[] }" }, 400);
     }
     try {
       const permissions = await setUserPermissions(config.usersFile!, target, {
-        canManageLarkApps: body.canManageLarkApps,
+        manageApps: body.manageApps as string[],
       });
       return c.json({ username: target, permissions });
     } catch (err) {

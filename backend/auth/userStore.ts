@@ -38,12 +38,13 @@ export type UserRole = "admin" | "user";
 
 export interface UserPermissions {
   /**
-   * Whether the user may add/remove their own Feishu / Lark app configs from
-   * the Integrations page. Admins always can; for regular users this is an
-   * explicit admin-granted privilege (default false). Absent in the file =
-   * false.
+   * Integration provider ids the user is allowed to register / remove
+   * their own apps for. Admins ignore this (they can manage anything);
+   * for regular users this is an explicit admin-granted allowlist
+   * (default empty). New IM providers reuse the same field — just push
+   * their id into the array.
    */
-  canManageLarkApps?: boolean;
+  manageApps?: string[];
 }
 
 export interface StoredUser {
@@ -123,8 +124,18 @@ function normalizePermissions(raw: unknown): UserPermissions | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const p = raw as Record<string, unknown>;
   const out: UserPermissions = {};
-  if (typeof p.canManageLarkApps === "boolean") {
-    out.canManageLarkApps = p.canManageLarkApps;
+  // New shape: { manageApps: ["lark", ...] }
+  if (Array.isArray(p.manageApps)) {
+    const ids = p.manageApps.filter((v): v is string => typeof v === "string");
+    if (ids.length > 0) out.manageApps = Array.from(new Set(ids));
+  }
+  // Legacy shape: { canManageLarkApps: true }. Migrated lazily — gets
+  // written back in the new shape next time the user is mutated.
+  if (
+    !out.manageApps &&
+    (p as { canManageLarkApps?: unknown }).canManageLarkApps === true
+  ) {
+    out.manageApps = ["lark"];
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -190,18 +201,19 @@ export async function listUsers(path: string): Promise<PublicUser[]> {
 }
 
 /**
- * Look up a single permission for the given user. Returns `false` when the
- * user doesn't exist or the file is unreadable — fail closed.
+ * Whether the user is allowed to manage their own apps for a given
+ * integration provider. Admins should be checked separately (they always
+ * may). Returns false when the user doesn't exist or the file is
+ * unreadable — fail closed.
  */
-export async function getUserPermission(
+export async function canManageProviderApps(
   path: string,
   username: string,
-  key: keyof UserPermissions,
+  providerId: string,
 ): Promise<boolean> {
   const users = await getUsers(path);
   const user = users.find((u) => u.username === username);
-  if (!user || !user.permissions) return false;
-  return user.permissions[key] === true;
+  return user?.permissions?.manageApps?.includes(providerId) ?? false;
 }
 
 export async function setUserPermissions(
@@ -216,9 +228,13 @@ export async function setUserPermissions(
   }
   const current = users[idx].permissions ?? {};
   const next: UserPermissions = { ...current };
-  if ("canManageLarkApps" in patch) {
-    if (patch.canManageLarkApps === true) next.canManageLarkApps = true;
-    else delete next.canManageLarkApps;
+  if ("manageApps" in patch) {
+    const list = patch.manageApps;
+    if (Array.isArray(list) && list.length > 0) {
+      next.manageApps = Array.from(new Set(list.filter((v) => v.length > 0)));
+    } else {
+      delete next.manageApps;
+    }
   }
   users[idx] = {
     ...users[idx],
