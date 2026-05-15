@@ -20,10 +20,23 @@ import { exists, readTextFile, stat } from "../utils/fs.ts";
 import { getHomeDir } from "../utils/os.ts";
 import { logger } from "../utils/logger.ts";
 
+export type LarkPermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "bypassPermissions"
+  | "plan";
+
 export interface LarkBinding {
   username: string;
   cwd: string;
   sessionId?: string;
+  /**
+   * Per-binding Claude permission mode. Defaults to "bypassPermissions" at
+   * use time when undefined — the bot has no UI to answer permission
+   * prompts so the safe-default in the web UI ("default" = ask each time)
+   * would hang the turn forever. Users can switch via `/perms`.
+   */
+  permissionMode?: LarkPermissionMode;
 }
 
 export interface BindingFile {
@@ -37,6 +50,19 @@ export function defaultBindingPath(): string {
 }
 
 let cache: { path: string; mtime: number; data: BindingFile } | null = null;
+
+const VALID_MODES: LarkPermissionMode[] = [
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+  "plan",
+];
+
+function normalizeMode(v: unknown): LarkPermissionMode | undefined {
+  return typeof v === "string" && (VALID_MODES as string[]).includes(v)
+    ? (v as LarkPermissionMode)
+    : undefined;
+}
 
 function isBindingValue(v: unknown): v is LarkBinding {
   if (!v || typeof v !== "object") return false;
@@ -65,6 +91,9 @@ async function loadFromDisk(path: string): Promise<BindingFile> {
           username: v.username,
           cwd: v.cwd,
           sessionId: v.sessionId,
+          permissionMode: normalizeMode(
+            (v as { permissionMode?: unknown }).permissionMode,
+          ),
         };
       }
       return out;
@@ -81,6 +110,9 @@ async function loadFromDisk(path: string): Promise<BindingFile> {
           username: v.username,
           cwd: v.cwd,
           sessionId: v.sessionId,
+          permissionMode: normalizeMode(
+            (v as { permissionMode?: unknown }).permissionMode,
+          ),
         };
       }
     }

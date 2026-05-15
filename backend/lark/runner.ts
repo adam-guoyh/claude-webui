@@ -35,6 +35,13 @@ export interface RunLarkChatResult {
   /** Whatever session_id Claude reported on the first SDK message — the
    *  conversation the user actually owns. */
   sessionId: string | null;
+  /** Names of tools Claude used during this turn, in call order. The
+   *  handler renders this as a fallback summary when `text` is empty so
+   *  the user can still see what work happened. */
+  toolNames: string[];
+  /** Final result message's subtype (e.g. "success", "error_max_turns").
+   *  Useful for explaining why Claude stopped without saying anything. */
+  resultSubtype?: string;
   /** Surface error so the handler can post a "failed" message and not
    *  silently drop the request. */
   error?: string;
@@ -63,6 +70,8 @@ export async function runLarkChat(
   let assembled = "";
   let firstSessionId: string | null = null;
   let ownerTagged = false;
+  let resultSubtype: string | undefined;
+  const toolNames: string[] = [];
   const stderrChunks: string[] = [];
 
   try {
@@ -98,38 +107,57 @@ export async function runLarkChat(
         }
       }
 
-      // Collect text content. Same shape as the SDK's assistant messages —
-      // see `frontend/node_modules/@anthropic-ai/claude-code/sdk.d.ts`.
+      const msgType = (sdkMessage as { type?: string }).type;
+
+      // Collect text content + tool names. Same shape as the SDK's
+      // assistant messages — see
+      // `frontend/node_modules/@anthropic-ai/claude-code/sdk.d.ts`.
       if (
-        (sdkMessage as { type?: string }).type === "assistant" &&
+        msgType === "assistant" &&
         (sdkMessage as { message?: { content?: unknown } }).message
       ) {
         const content = (sdkMessage as { message: { content: unknown } })
           .message.content;
         if (Array.isArray(content)) {
           for (const item of content) {
-            if (
-              item &&
-              typeof item === "object" &&
-              (item as { type?: string }).type === "text"
-            ) {
+            if (!item || typeof item !== "object") continue;
+            const itemType = (item as { type?: string }).type;
+            if (itemType === "text") {
               const text = (item as { text?: unknown }).text;
               if (typeof text === "string") assembled += text;
+            } else if (itemType === "tool_use") {
+              const name = (item as { name?: unknown }).name;
+              if (typeof name === "string") toolNames.push(name);
             }
           }
         } else if (typeof content === "string") {
           assembled += content;
         }
       }
+
+      // Capture the final result message's subtype so the handler can
+      // explain *why* Claude stopped (max-turns, error, etc.) when the
+      // assistant didn't say anything itself.
+      if (msgType === "result") {
+        const sub = (sdkMessage as { subtype?: unknown }).subtype;
+        if (typeof sub === "string") resultSubtype = sub;
+      }
     }
 
-    return { text: assembled.trim(), sessionId: firstSessionId };
+    return {
+      text: assembled.trim(),
+      sessionId: firstSessionId,
+      toolNames,
+      resultSubtype,
+    };
   } catch (error) {
     const stderrTail = stderrChunks.join("").trim().slice(-1500);
     const msg = error instanceof Error ? error.message : String(error);
     return {
       text: assembled.trim(),
       sessionId: firstSessionId,
+      toolNames,
+      resultSubtype,
       error: stderrTail ? `${msg}\n--- stderr ---\n${stderrTail}` : msg,
     };
   }

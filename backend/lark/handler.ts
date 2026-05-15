@@ -15,9 +15,43 @@ import {
   updateBinding,
   type LarkBinding,
 } from "./binding.ts";
-import { runLarkChat } from "./runner.ts";
+import { runLarkChat, type RunLarkChatResult } from "./runner.ts";
 import { listUserSessionsInCwd, type SessionRow } from "./sessions.ts";
 import type { LinkCodeStore } from "../integrations/linkCodes.ts";
+
+const VALID_PERM_MODES = [
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+  "plan",
+] as const;
+type PermMode = (typeof VALID_PERM_MODES)[number];
+
+/**
+ * Build the user-facing reply for a Claude turn. Falls back to a tool
+ * usage summary when Claude finished without text (typical for "just go
+ * do it" requests where the assistant skips a closing remark).
+ */
+function buildReply(result: RunLarkChatResult): string {
+  if (result.error) {
+    return `Error: ${result.error}`;
+  }
+  if (result.text) return result.text;
+  if (result.toolNames.length > 0) {
+    const counts = new Map<string, number>();
+    for (const name of result.toolNames) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    const summary = Array.from(counts.entries())
+      .map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
+      .join(", ");
+    return `✓ Done. Used tools: ${summary}. (No text from the model.)`;
+  }
+  if (result.resultSubtype && result.resultSubtype !== "success") {
+    return `Claude stopped: ${result.resultSubtype}. (No text emitted.)`;
+  }
+  return "(no text response)";
+}
 
 function relativeTime(iso: string): string {
   const t = new Date(iso).getTime();
@@ -92,6 +126,7 @@ function statusLine(binding: LarkBinding): string {
     `user:      ${binding.username}`,
     `cwd:       ${binding.cwd}`,
     `session:   ${binding.sessionId ? binding.sessionId.slice(0, 8) + "…" : "(new)"}`,
+    `perms:     ${binding.permissionMode ?? "bypassPermissions (default)"}`,
   ].join("\n");
 }
 
@@ -105,9 +140,12 @@ const HELP_TEXT = [
   "/list                          list your recent sessions in the current cwd",
   "/resume <sessionId or 8-char>  continue an existing webui session",
   "/new                           start a fresh Claude session",
+  "/perms <mode>                  set Claude permission mode (default | acceptEdits | bypassPermissions | plan)",
   "/help                          show this message",
   "",
   "Plain messages are forwarded to Claude under your bound account.",
+  "Default permission mode is bypassPermissions — the bot can't answer",
+  "permission prompts, so they'd otherwise hang the turn.",
 ].join("\n");
 
 /**
@@ -316,6 +354,30 @@ export async function handleLarkMessage(
         return;
       }
 
+      if (trimmed.startsWith("/perms ") || trimmed === "/perms") {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length !== 2) {
+          await cfg.sendText(
+            msg.chatId,
+            `Usage: /perms <mode>   modes: ${VALID_PERM_MODES.join(" | ")}`,
+          );
+          return;
+        }
+        const mode = parts[1] as PermMode;
+        if (!(VALID_PERM_MODES as readonly string[]).includes(mode)) {
+          await cfg.sendText(
+            msg.chatId,
+            `Unknown mode "${parts[1]}". Valid: ${VALID_PERM_MODES.join(" | ")}.`,
+          );
+          return;
+        }
+        await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
+          permissionMode: mode,
+        });
+        await cfg.sendText(msg.chatId, `Permission mode → ${mode}.`);
+        return;
+      }
+
       if (trimmed === "/new") {
         await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
           sessionId: undefined,
@@ -328,20 +390,29 @@ export async function handleLarkMessage(
       }
 
       // Default: send to Claude.
-      logger.cli.debug("Lark→Claude: {user} ({cwd}) — {len} chars", {
-        user: binding.username,
-        cwd: binding.cwd,
-        len: trimmed.length,
-      });
+      logger.cli.debug(
+        "Lark→Claude: {user} ({cwd}) — {len} chars, perm={perm}",
+        {
+          user: binding.username,
+          cwd: binding.cwd,
+          len: trimmed.length,
+          perm: binding.permissionMode ?? "bypassPermissions (default)",
+        },
+      );
       const placeholder = await cfg
         .sendText(msg.chatId, "Thinking…")
         .catch(() => undefined);
+      // Default to bypassPermissions for the bot — there's no UI in
+      // Feishu to answer per-tool permission prompts, so the SDK's
+      // ask-each-time default would hang the turn. Users can opt into
+      // stricter modes via `/perms`.
       const result = await runLarkChat({
         message: trimmed,
         cliPath: cfg.cliPath,
         workingDirectory: binding.cwd,
         sessionId: binding.sessionId,
         ownerToTag: binding.username,
+        permissionMode: binding.permissionMode ?? "bypassPermissions",
       });
       // Persist the resolved sessionId so the next turn resumes the same
       // conversation. Idempotent against the on-disk state.
@@ -350,9 +421,7 @@ export async function handleLarkMessage(
           sessionId: result.sessionId,
         });
       }
-      const reply = result.error
-        ? `Error: ${result.error}`
-        : result.text || "(no text response)";
+      const reply = buildReply(result);
       await cfg.sendText(msg.chatId, reply);
       // We don't have a message_id from sendText to edit the "Thinking…"
       // placeholder away; the simplest UX is to leave it. Mark it consumed.
