@@ -158,7 +158,9 @@ The backend can also serve as a Feishu (China) or Lark (international) chat bot,
 4. Permissions: grant **`im:message`** (receive messages) and **`im:message:send_as_bot`** (send messages).
 5. Publish a version of the app and wait for it to be approved by your tenant admin.
 
-### Run the backend with the bot
+### Register the app in the backend
+
+Start the backend in multi-user mode (the bot uses webui accounts for `/bind` / `/link` verification), then add the app from the web UI:
 
 ```bash
 PORT=8081 \
@@ -166,13 +168,14 @@ PORT=8081 \
   npm --prefix backend run dev -- \
     --claude-path "$(which claude)" \
     --users-file ~/.claude-webui/users.json \
-    --lark-app-id cli_abcdef \
-    --lark-app-secret xxxxxxxxxxxxxxxx \
-    --lark-domain feishu \
     --lark-default-cwd "$HOME/work"
 ```
 
-Multi-user mode (`--users-file`) is required: the bot uses webui accounts to authenticate `/bind`. The bot opens a websocket to Feishu, so the backend host needs outbound HTTPS but no inbound port.
+Once signed in as admin, open the avatar menu → **Integrations** → top card **"Feishu / Lark apps (admin)"** → fill in `App ID` / `App Secret` / domain → **Add**. The backend hot-starts the websocket and the card flips to **running**. To rotate credentials, remove the app and add it again; to onboard a different tenant, just add another app — there's no limit. Configs live at `~/.claude-webui/lark-apps.json` (chmod 600, plaintext secrets — treat like `users.json`).
+
+The bot opens a websocket per app to Feishu, so the backend host needs outbound HTTPS but no inbound port.
+
+Legacy `--lark-app-id` / `--lark-app-secret` / `--lark-domain` CLI flags are still accepted: on startup they upsert the app into `lark-apps.json` and bring the bot up — same as filling the form in the UI.
 
 ### Pair an account
 
@@ -255,6 +258,14 @@ Integrations (multi-user mode, gated; per-caller):
 GET    /api/integrations                                      → { providers: [{ id, displayName, enabled, bindings: [...] }] }
 POST   /api/integrations/:provider/code                        → { code, expiresAt, ttlSeconds }   (single-use, 10 min)
 DELETE /api/integrations/:provider/bindings/:externalId        unbind an IM account from the caller
+```
+
+Integrations — Feishu / Lark app management (admin only):
+
+```
+GET    /api/integrations/lark/apps                              → { apps: [{ id, appId, domain, displayName?, running, createdAt }] }
+POST   /api/integrations/lark/apps     { appId, appSecret, domain?, displayName? }
+DELETE /api/integrations/lark/apps/:id
 ```
 
 All `/api/*` requests (except `/api/auth/status` and `/api/auth/login` in multi-user mode) require `Authorization: Bearer <session-or-shared-token>`.

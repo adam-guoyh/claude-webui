@@ -22,6 +22,8 @@ export interface LarkHandlerConfig {
   cliPath: string;
   usersFile: string;
   bindingPath: string;
+  /** Which Feishu app this dispatcher belongs to — keys the binding store. */
+  appId: string;
   defaultCwd: string;
   /** Send a text reply to the chat that originated the event. */
   sendText: (chatId: string, text: string) => Promise<void>;
@@ -92,8 +94,10 @@ export async function handleLarkMessage(
   cfg: LarkHandlerConfig,
 ): Promise<void> {
   const trimmed = msg.text.trim();
-  const binding = await getBinding(cfg.bindingPath, msg.openId);
-  const lockKey = binding ? binding.username : `pending:${msg.openId}`;
+  const binding = await getBinding(cfg.bindingPath, cfg.appId, msg.openId);
+  const lockKey = binding
+    ? binding.username
+    : `pending:${cfg.appId}:${msg.openId}`;
 
   await serializePerUser(lockKey, async () => {
     try {
@@ -141,7 +145,7 @@ export async function handleLarkMessage(
           username,
           cwd: binding?.cwd ?? cfg.defaultCwd,
         };
-        await setBinding(cfg.bindingPath, msg.openId, next);
+        await setBinding(cfg.bindingPath, cfg.appId, msg.openId, next);
         await cfg.sendText(
           msg.chatId,
           `Linked as ${username}. Working directory: ${next.cwd}\n${HELP_TEXT}`,
@@ -165,7 +169,7 @@ export async function handleLarkMessage(
           username,
           cwd: binding?.cwd ?? cfg.defaultCwd,
         };
-        await setBinding(cfg.bindingPath, msg.openId, next);
+        await setBinding(cfg.bindingPath, cfg.appId, msg.openId, next);
         await cfg.sendText(
           msg.chatId,
           `Bound as ${username}. Working directory: ${next.cwd}\n${HELP_TEXT}`,
@@ -178,7 +182,7 @@ export async function handleLarkMessage(
           await cfg.sendText(msg.chatId, "You're not bound to anything.");
           return;
         }
-        await removeBinding(cfg.bindingPath, msg.openId);
+        await removeBinding(cfg.bindingPath, cfg.appId, msg.openId);
         await cfg.sendText(msg.chatId, "Unbound. Use /bind to link again.");
         return;
       }
@@ -205,7 +209,7 @@ export async function handleLarkMessage(
           );
           return;
         }
-        await updateBinding(cfg.bindingPath, msg.openId, {
+        await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
           cwd: newCwd,
           sessionId: undefined, // new directory ⇒ new session
         });
@@ -214,7 +218,7 @@ export async function handleLarkMessage(
       }
 
       if (trimmed === "/new") {
-        await updateBinding(cfg.bindingPath, msg.openId, {
+        await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
           sessionId: undefined,
         });
         await cfg.sendText(
@@ -243,7 +247,7 @@ export async function handleLarkMessage(
       // Persist the resolved sessionId so the next turn resumes the same
       // conversation. Idempotent against the on-disk state.
       if (result.sessionId && result.sessionId !== binding.sessionId) {
-        await updateBinding(cfg.bindingPath, msg.openId, {
+        await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
           sessionId: result.sessionId,
         });
       }

@@ -11,8 +11,9 @@ import { parseCliArgs } from "./args.ts";
 import { validateClaudeCli } from "./validation.ts";
 import { logger, setupLogger } from "../utils/logger.ts";
 import { bootstrapAdminUser } from "../auth/bootstrap.ts";
-import { startLarkBot } from "../lark/index.ts";
+import { LarkBotManager } from "../lark/manager.ts";
 import { defaultBindingPath as defaultLarkBindingPath } from "../lark/binding.ts";
+import { defaultAppsPath as defaultLarkAppsPath } from "../lark/appStore.ts";
 import { IntegrationRegistry } from "../integrations/registry.ts";
 import { LinkCodeStore } from "../integrations/linkCodes.ts";
 import { createLarkProvider } from "../integrations/larkProvider.ts";
@@ -41,13 +42,26 @@ async function main(runtime: DenoRuntime) {
   const integrationRegistry = new IntegrationRegistry();
   const linkCodes = new LinkCodeStore();
   const larkBindingPath = defaultLarkBindingPath();
-  const larkEnabled = Boolean(args.larkAppId && args.larkAppSecret);
+  const larkAppsPath = defaultLarkAppsPath();
   integrationRegistry.register(
     createLarkProvider({
-      enabled: larkEnabled,
       bindingPath: larkBindingPath,
+      appsFilePath: larkAppsPath,
     }),
   );
+
+  let larkManager: LarkBotManager | undefined;
+  if (args.usersFile) {
+    const defaultCwd = args.larkDefaultCwd ?? getHomeDir() ?? Deno.cwd();
+    larkManager = new LarkBotManager({
+      appsFilePath: larkAppsPath,
+      bindingPath: larkBindingPath,
+      cliPath,
+      usersFile: args.usersFile,
+      defaultCwd,
+      linkCodes,
+    });
+  }
 
   const app = createApp(runtime, {
     debugMode: args.debug,
@@ -55,7 +69,11 @@ async function main(runtime: DenoRuntime) {
     cliPath: cliPath,
     authToken: args.authToken,
     usersFile: args.usersFile,
-    integrations: { registry: integrationRegistry, codes: linkCodes },
+    integrations: {
+      registry: integrationRegistry,
+      codes: linkCodes,
+      larkManager,
+    },
   });
 
   if (args.usersFile) {
@@ -69,26 +87,22 @@ async function main(runtime: DenoRuntime) {
     logger.cli.info("🔓 Auth disabled (no token or users file configured)");
   }
 
-  // Optional Feishu / Lark bot. Multi-user login is required so the bot
-  // can verify /bind credentials against the users file.
-  if (larkEnabled) {
-    if (!args.usersFile) {
-      logger.cli.warn(
-        "⚠️  --lark-app-id/secret provided but --users-file is not set; the Feishu bot needs a users file for /bind verification and will not start.",
-      );
-    } else {
-      const defaultCwd = args.larkDefaultCwd ?? getHomeDir() ?? Deno.cwd();
-      await startLarkBot({
-        appId: args.larkAppId!,
-        appSecret: args.larkAppSecret!,
-        cliPath,
-        usersFile: args.usersFile,
-        defaultCwd,
-        domain: args.larkDomain,
-        bindingPath: larkBindingPath,
-        linkCodes,
+  // Backward-compatible CLI bootstrap: if --lark-app-id/secret were passed,
+  // upsert them into the persisted apps file. Going forward, admins add
+  // apps from the web UI instead.
+  if (larkManager) {
+    if (args.larkAppId && args.larkAppSecret) {
+      await larkManager.ensureFromCli({
+        appId: args.larkAppId,
+        appSecret: args.larkAppSecret,
+        domain: args.larkDomain ?? "feishu",
       });
     }
+    await larkManager.startAll();
+  } else if (args.larkAppId && args.larkAppSecret) {
+    logger.cli.warn(
+      "⚠️  --lark-app-id/secret provided but --users-file is not set; the Feishu bot needs a users file for /bind verification and will not start.",
+    );
   }
 
   // Start server (only show this message when everything is ready)

@@ -90,6 +90,32 @@ export interface IntegrationCodeResponse {
   ttlSeconds: number;
 }
 
+/**
+ * Admin-only payload listing the persisted Feishu / Lark app configs
+ * the backend is currently running. `appSecret` is never sent — operators
+ * who need it should look at the file directly.
+ */
+export interface LarkAppPublic {
+  id: string;
+  appId: string;
+  domain: "feishu" | "lark";
+  displayName?: string;
+  createdAt: string;
+  /** True when the WSClient for this app is currently active. */
+  running: boolean;
+}
+
+export interface LarkAppsResponse {
+  apps: LarkAppPublic[];
+}
+
+export interface LarkAppCreateRequest {
+  appId: string;
+  appSecret: string;
+  domain?: "feishu" | "lark";
+  displayName?: string;
+}
+
 // Conversation history types
 // Note: messages are typed as unknown[] to avoid frontend/backend dependency issues
 // Frontend should cast to TimestampedSDKMessage[] (defined in frontend/src/types.ts)

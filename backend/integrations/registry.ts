@@ -1,10 +1,15 @@
 /**
  * Provider registry for IM integrations.
  *
- * Each provider knows how to list the bindings owned by a given webui user
- * and how to remove one. The HTTP handler treats providers uniformly so
- * adding WeChat / QQ in future is just appending another `IntegrationProvider`
- * to the registry (plus that provider's own bot wiring).
+ * Each provider knows whether it's currently enabled, how to list the
+ * bindings owned by a given webui user, and how to remove one. The HTTP
+ * handler treats providers uniformly so adding WeChat / QQ in future is
+ * just appending another `IntegrationProvider` (plus that provider's own
+ * bot wiring).
+ *
+ * `isEnabled` is async so providers can derive it from runtime config
+ * — e.g. the Lark provider returns true iff at least one app has been
+ * registered via the admin UI, with no process restart required.
  */
 
 import type { IntegrationBinding } from "../../shared/types.ts";
@@ -12,8 +17,11 @@ import type { IntegrationBinding } from "../../shared/types.ts";
 export interface IntegrationProvider {
   id: string;
   displayName: string;
-  /** True when the backend has credentials configured for this provider. */
-  enabled: boolean;
+  /**
+   * True when the backend has at least one configuration that allows the
+   * provider to actually exchange messages. May change at runtime.
+   */
+  isEnabled(): Promise<boolean>;
   /** Return all bindings owned by this webui user. */
   listBindings(username: string): Promise<IntegrationBinding[]>;
   /**

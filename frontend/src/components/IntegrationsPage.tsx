@@ -10,6 +10,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../utils/authFetch";
 import { getApiUrl } from "../config/api";
+import { useAuth } from "../hooks/useAuth";
+import { LarkAppAdmin } from "./LarkAppAdmin";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 import { UserMenu } from "./UserMenu";
@@ -35,6 +37,8 @@ interface ActiveCode {
 export function IntegrationsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [providers, setProviders] = useState<IntegrationProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +165,8 @@ export function IntegrationsPage() {
             {error}
           </div>
         )}
+
+        {isAdmin && <LarkAppAdmin onChange={() => void refresh()} />}
 
         {loading ? (
           <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">

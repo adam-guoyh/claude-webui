@@ -46,9 +46,12 @@ import { handleConversationRequest } from "./handlers/conversations.ts";
 import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
 import {
+  handleAddLarkApp,
   handleIssueLinkCode,
   handleListIntegrations,
+  handleListLarkApps,
   handleRemoveBinding,
+  handleRemoveLarkApp,
   type IntegrationsDeps,
 } from "./handlers/integrations.ts";
 import { logger } from "./utils/logger.ts";
@@ -310,6 +313,14 @@ export function createApp(
   // there is no "self" to bind. Returns 404 otherwise.
   if (config.integrations && config.usersFile) {
     const deps = config.integrations;
+    const requireAdminGate = async (
+      c: Context<ConfigContext>,
+    ): Promise<Response | null> => {
+      const check = await requireAdmin(c.var.authUser);
+      if (!check.ok) return c.json({ error: check.error }, check.status);
+      return null;
+    };
+
     app.get("/api/integrations", (c) => handleListIntegrations(c, deps));
     app.post("/api/integrations/:provider/code", (c) =>
       handleIssueLinkCode(c, deps),
@@ -317,6 +328,25 @@ export function createApp(
     app.delete("/api/integrations/:provider/bindings/:externalId", (c) =>
       handleRemoveBinding(c, deps),
     );
+
+    // Admin-only app management for the Lark provider. Adding an app
+    // hot-starts a websocket; removing one stops it. Both persist to
+    // ~/.claude-webui/lark-apps.json.
+    app.get("/api/integrations/lark/apps", async (c) => {
+      const block = await requireAdminGate(c);
+      if (block) return block;
+      return handleListLarkApps(c, deps);
+    });
+    app.post("/api/integrations/lark/apps", async (c) => {
+      const block = await requireAdminGate(c);
+      if (block) return block;
+      return handleAddLarkApp(c, deps);
+    });
+    app.delete("/api/integrations/lark/apps/:id", async (c) => {
+      const block = await requireAdminGate(c);
+      if (block) return block;
+      return handleRemoveLarkApp(c, deps);
+    });
   } else {
     app.get("/api/integrations", (c) =>
       c.json({ error: "Integrations not available" }, 404),

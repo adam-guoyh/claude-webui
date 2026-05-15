@@ -1,10 +1,17 @@
 /**
  * Persisted Feishu open_id ↔ webui username binding.
  *
- * Stored at `~/.claude-webui/lark-bindings.json`. Each entry tracks the
- * mapped webui username, the working directory the bot should hand to
- * Claude, and the active sessionId so multi-turn conversations resume
- * across bot restarts.
+ * Stored at `~/.claude-webui/lark-bindings.json`. Bindings are nested by
+ * appId so a single backend can host multiple Feishu apps without their
+ * bindings colliding (two different tenants can both have open_id "ou_abc"
+ * pointing at different users).
+ *
+ * On-disk format:
+ *     { "<appId>": { "<openId>": { username, cwd, sessionId? } } }
+ *
+ * A legacy flat format (`{ "<openId>": {...} }`) is still readable for
+ * single-app installs that pre-date multi-app support — it gets surfaced
+ * under an empty-appId bucket and migrated lazily on first read.
  */
 
 import { promises as fs } from "node:fs";
@@ -19,8 +26,8 @@ export interface LarkBinding {
   sessionId?: string;
 }
 
-interface BindingFile {
-  [openId: string]: LarkBinding;
+export interface BindingFile {
+  [appId: string]: { [openId: string]: LarkBinding };
 }
 
 export function defaultBindingPath(): string {
@@ -31,6 +38,12 @@ export function defaultBindingPath(): string {
 
 let cache: { path: string; mtime: number; data: BindingFile } | null = null;
 
+function isBindingValue(v: unknown): v is LarkBinding {
+  if (!v || typeof v !== "object") return false;
+  const rec = v as Record<string, unknown>;
+  return typeof rec.username === "string" && typeof rec.cwd === "string";
+}
+
 async function loadFromDisk(path: string): Promise<BindingFile> {
   if (!(await exists(path))) return {};
   try {
@@ -39,19 +52,37 @@ async function loadFromDisk(path: string): Promise<BindingFile> {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
-    const out: BindingFile = {};
-    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!v || typeof v !== "object") continue;
-      const rec = v as Record<string, unknown>;
-      if (typeof rec.username !== "string" || typeof rec.cwd !== "string") {
-        continue;
+    const obj = parsed as Record<string, unknown>;
+    // Detect legacy flat format by checking whether the top-level values
+    // already look like bindings rather than nested maps.
+    const values = Object.values(obj);
+    const legacy = values.length > 0 && values.every(isBindingValue);
+    if (legacy) {
+      const out: BindingFile = { "": {} };
+      for (const [openId, v] of Object.entries(obj)) {
+        if (!isBindingValue(v)) continue;
+        out[""][openId] = {
+          username: v.username,
+          cwd: v.cwd,
+          sessionId: v.sessionId,
+        };
       }
-      out[k] = {
-        username: rec.username,
-        cwd: rec.cwd,
-        sessionId:
-          typeof rec.sessionId === "string" ? rec.sessionId : undefined,
-      };
+      return out;
+    }
+    const out: BindingFile = {};
+    for (const [appId, inner] of Object.entries(obj)) {
+      if (!inner || typeof inner !== "object" || Array.isArray(inner)) continue;
+      out[appId] = {};
+      for (const [openId, v] of Object.entries(
+        inner as Record<string, unknown>,
+      )) {
+        if (!isBindingValue(v)) continue;
+        out[appId][openId] = {
+          username: v.username,
+          cwd: v.cwd,
+          sessionId: v.sessionId,
+        };
+      }
     }
     return out;
   } catch (error) {
@@ -65,11 +96,11 @@ export async function loadBindings(path: string): Promise<BindingFile> {
     const info = await stat(path);
     const mtime = info.mtime?.getTime() ?? 0;
     if (cache && cache.path === path && cache.mtime === mtime) {
-      return { ...cache.data };
+      return structuredClone(cache.data);
     }
     const data = await loadFromDisk(path);
     cache = { path, mtime, data };
-    return { ...data };
+    return structuredClone(data);
   } catch {
     return loadFromDisk(path);
   }
@@ -83,44 +114,80 @@ async function writeFile(path: string, data: BindingFile): Promise<void> {
   cache = null;
 }
 
+/**
+ * Look up a binding for a specific (appId, openId). Also consults the
+ * legacy empty-appId bucket and lazily migrates an entry the first time
+ * it's seen — so a single-app install upgrading to multi-app preserves
+ * existing bindings without operator intervention.
+ */
 export async function getBinding(
   path: string,
+  appId: string,
   openId: string,
 ): Promise<LarkBinding | null> {
   const data = await loadBindings(path);
-  return data[openId] ?? null;
+  const direct = data[appId]?.[openId];
+  if (direct) return direct;
+  const legacy = data[""]?.[openId];
+  if (legacy) {
+    if (!data[appId]) data[appId] = {};
+    data[appId][openId] = legacy;
+    delete data[""][openId];
+    if (Object.keys(data[""]).length === 0) delete data[""];
+    await writeFile(path, data);
+    return legacy;
+  }
+  return null;
 }
 
 export async function setBinding(
   path: string,
+  appId: string,
   openId: string,
   binding: LarkBinding,
 ): Promise<void> {
   const data = await loadBindings(path);
-  data[openId] = binding;
+  if (!data[appId]) data[appId] = {};
+  data[appId][openId] = binding;
   await writeFile(path, data);
 }
 
 export async function removeBinding(
   path: string,
+  appId: string,
   openId: string,
 ): Promise<void> {
   const data = await loadBindings(path);
-  if (!(openId in data)) return;
-  delete data[openId];
-  await writeFile(path, data);
+  let changed = false;
+  if (data[appId]?.[openId]) {
+    delete data[appId][openId];
+    if (Object.keys(data[appId]).length === 0) delete data[appId];
+    changed = true;
+  }
+  if (data[""]?.[openId]) {
+    delete data[""][openId];
+    if (Object.keys(data[""]).length === 0) delete data[""];
+    changed = true;
+  }
+  if (changed) await writeFile(path, data);
 }
 
 export async function updateBinding(
   path: string,
+  appId: string,
   openId: string,
   patch: Partial<LarkBinding>,
 ): Promise<LarkBinding | null> {
   const data = await loadBindings(path);
-  const current = data[openId];
+  const current = data[appId]?.[openId] ?? data[""]?.[openId];
   if (!current) return null;
   const next = { ...current, ...patch };
-  data[openId] = next;
+  if (!data[appId]) data[appId] = {};
+  data[appId][openId] = next;
+  if (data[""]?.[openId]) {
+    delete data[""][openId];
+    if (Object.keys(data[""]).length === 0) delete data[""];
+  }
   await writeFile(path, data);
   return next;
 }
