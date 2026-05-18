@@ -67,29 +67,32 @@ start_backend() {
   mkdir -p "$(dirname "$USERS_FILE")"
 
   log "starting backend on :$PORT (claude=$CLAUDE_PATH, users=$USERS_FILE)"
-  local debug_flag=()
-  [[ -n "$DEBUG" ]] && debug_flag+=(--debug)
 
-  # Use setsid where available so the child survives terminal close; on macOS
-  # fall back to plain backgrounding.
-  local launcher=()
-  command -v setsid >/dev/null 2>&1 && launcher=(setsid)
+  # Build cli args. Always has the two flags below, so the array is never
+  # empty (which would trip `set -u` on bash 3.2 / macOS default).
+  local cli_args=(
+    --claude-path "$CLAUDE_PATH"
+    --users-file "$USERS_FILE"
+  )
+  [[ -n "$DEBUG" ]] && cli_args+=(--debug)
 
+  touch "$BACKEND_LOG"
   (
     cd "$REPO_ROOT"
-    PORT="$PORT" \
-    WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}" \
-    "${launcher[@]}" \
-      npm --prefix backend run dev -- \
-        --claude-path "$CLAUDE_PATH" \
-        --users-file "$USERS_FILE" \
-        "${debug_flag[@]}" \
-        >>"$BACKEND_LOG" 2>&1 &
+    nohup env \
+      PORT="$PORT" \
+      WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}" \
+      npm --prefix backend run dev -- "${cli_args[@]}" \
+      >>"$BACKEND_LOG" 2>&1 &
     echo $! >"$BACKEND_PID_FILE"
+    disown 2>/dev/null || true
   )
-  sleep 0.5
+  sleep 1
   if is_running "$BACKEND_PID_FILE"; then
     log "backend pid=$(cat "$BACKEND_PID_FILE"), log=$BACKEND_LOG"
+    if [[ -z "${WEBUI_ADMIN_PASSWORD:-}" ]]; then
+      warn "WEBUI_ADMIN_PASSWORD not set — backend will generate a random admin password on first start and print it to the log. Grab it: scripts/webui.sh logs backend | grep -i password"
+    fi
   else
     rm -f "$BACKEND_PID_FILE"
     die "backend failed to launch; tail the log: $BACKEND_LOG"
@@ -102,16 +105,16 @@ start_frontend() {
     return 0
   fi
   log "starting frontend on :$FRONTEND_PORT (proxy backend :$PORT)"
-  local launcher=()
-  command -v setsid >/dev/null 2>&1 && launcher=(setsid)
+  touch "$FRONTEND_LOG"
   (
     cd "$REPO_ROOT"
-    PORT="$PORT" "${launcher[@]}" \
+    nohup env PORT="$PORT" \
       npm --prefix frontend run dev -- --port "$FRONTEND_PORT" \
-        >>"$FRONTEND_LOG" 2>&1 &
+      >>"$FRONTEND_LOG" 2>&1 &
     echo $! >"$FRONTEND_PID_FILE"
+    disown 2>/dev/null || true
   )
-  sleep 0.5
+  sleep 1
   if is_running "$FRONTEND_PID_FILE"; then
     log "frontend pid=$(cat "$FRONTEND_PID_FILE"), log=$FRONTEND_LOG"
   else
