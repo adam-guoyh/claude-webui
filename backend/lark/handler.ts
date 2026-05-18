@@ -126,6 +126,33 @@ async function serializePerUser(
   await next;
 }
 
+/**
+ * Known bot commands. Used to normalize input from clients that intercept
+ * a literal "/" (QQ turns it into the slash-command lightning emoji and
+ * the user ends up unable to send `/link …` at all). If the first word
+ * matches one of these, we silently prepend "/" so the rest of the
+ * dispatcher's `trimmed.startsWith("/foo")` checks keep working.
+ */
+const KNOWN_COMMANDS = new Set([
+  "help",
+  "link",
+  "bind",
+  "unbind",
+  "status",
+  "cd",
+  "list",
+  "resume",
+  "new",
+  "perms",
+]);
+
+function normalizeCommand(input: string): string {
+  if (!input || input.startsWith("/")) return input;
+  const idx = input.search(/\s/);
+  const firstWord = (idx === -1 ? input : input.slice(0, idx)).toLowerCase();
+  return KNOWN_COMMANDS.has(firstWord) ? `/${input}` : input;
+}
+
 function statusLine(binding: LarkBinding): string {
   return [
     `user:      ${binding.username}`,
@@ -161,7 +188,7 @@ export async function handleLarkMessage(
   msg: IncomingMessage,
   cfg: LarkHandlerConfig,
 ): Promise<void> {
-  const trimmed = msg.text.trim();
+  const trimmed = normalizeCommand(msg.text.trim());
   const binding = await getBinding(cfg.bindingPath, cfg.appId, msg.openId);
   const lockKey = binding
     ? binding.username
