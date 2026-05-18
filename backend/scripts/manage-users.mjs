@@ -171,10 +171,25 @@ async function main() {
       process.exit(1);
     }
     const passwordHash = await hashPassword(password);
+    // Preserve role + permissions when overwriting an existing user.
+    // Without this, re-adding `admin` would silently demote to a regular
+    // user since the in-memory record drops the role field.
+    const existing = users.find((u) => u.username === username);
+    const role = flags.admin
+      ? "admin"
+      : flags.user
+        ? "user"
+        : (existing?.role ?? "user");
     const next = users.filter((u) => u.username !== username);
-    next.push({ username, passwordHash });
+    const rec = { username, passwordHash, role };
+    if (existing?.permissions) rec.permissions = existing.permissions;
+    next.push(rec);
     await writeUsers(path, next);
-    console.log(`✓ Saved ${username} to ${path}`);
+    console.log(
+      `✓ Saved ${username} (role=${role})${
+        existing ? " — password reset" : ""
+      } to ${path}`,
+    );
     return;
   }
 
