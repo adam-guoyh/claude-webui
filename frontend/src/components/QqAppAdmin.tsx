@@ -3,6 +3,7 @@ import { TrashIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../utils/authFetch";
 import { getApiUrl } from "../config/api";
+import { PasswordInput } from "./PasswordInput";
 import type {
   IntegrationPermissionsResponse,
   QqAppCreateRequest,
@@ -178,14 +179,13 @@ export function QqAppAdmin({ onChange }: Props) {
             className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoComplete="off"
           />
-          <input
-            type="password"
+          <PasswordInput
             value={form.appSecret}
             onChange={(e) =>
               setForm((f) => ({ ...f, appSecret: e.target.value }))
             }
             placeholder={t("integrations.appSecretPlaceholder")}
-            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             autoComplete="off"
           />
           <label className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 px-2 py-2 cursor-pointer select-none">

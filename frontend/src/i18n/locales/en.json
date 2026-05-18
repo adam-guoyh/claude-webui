@@ -6,7 +6,9 @@
     "loading": "Loading…",
     "error": "Error",
     "close": "Close",
-    "retry": "Retry"
+    "retry": "Retry",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "auth": {
     "subtitle": "Enter the bearer token configured on the server.",

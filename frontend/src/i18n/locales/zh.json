@@ -6,7 +6,9 @@
     "loading": "加载中…",
     "error": "错误",
     "close": "关闭",
-    "retry": "重试"
+    "retry": "重试",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "auth": {
     "subtitle": "请输入服务器配置的访问令牌。",

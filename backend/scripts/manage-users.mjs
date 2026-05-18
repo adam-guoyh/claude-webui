@@ -46,9 +46,12 @@ async function hashPassword(password) {
 }
 
 function defaultPath() {
+  // Must match the backend's defaultUsersFile() helper. Older copies of
+  // this script defaulted to `.claude-code-webui/` which doesn't match
+  // what the running backend reads — the resulting password reset would
+  // silently land in a parallel file and login would still fail.
   return (
-    process.env.WEBUI_USERS_FILE ||
-    `${homedir()}/.claude-code-webui/users.json`
+    process.env.WEBUI_USERS_FILE || `${homedir()}/.claude-webui/users.json`
   );
 }
 
