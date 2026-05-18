@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { authFetch } from "../utils/authFetch";
 import { getApiUrl } from "../config/api";
 import type {
-  LarkSettingsResponse,
+  IntegrationPermissionsResponse,
   QqAppCreateRequest,
   QqAppPublic,
   QqAppsResponse,
@@ -27,7 +27,8 @@ interface FormState extends Omit<QqAppCreateRequest, "owner" | "sandbox"> {
 export function QqAppAdmin({ onChange }: Props) {
   const { t } = useTranslation();
   const [apps, setApps] = useState<QqAppPublic[]>([]);
-  const [settings, setSettings] = useState<LarkSettingsResponse | null>(null);
+  const [permissions, setPermissions] =
+    useState<IntegrationPermissionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,26 +45,22 @@ export function QqAppAdmin({ onChange }: Props) {
     setLoading(true);
     setError(null);
     try {
-      // Settings endpoint is shared across providers (it returns the
-      // caller's role + global "can-manage" hint). For per-provider gating
-      // the actual add/remove handlers consult the user's `manageApps`
-      // allowlist.
-      const [appsRes, settingsRes] = await Promise.all([
+      const [appsRes, permsRes] = await Promise.all([
         authFetch(getApiUrl("/api/integrations/qq/apps")),
-        authFetch(getApiUrl("/api/integrations/lark/settings")),
+        authFetch(getApiUrl("/api/integrations/permissions")),
       ]);
-      if (appsRes.status === 404 || settingsRes.status === 404) {
+      if (appsRes.status === 404 || permsRes.status === 404) {
         setApps([]);
-        setSettings(null);
+        setPermissions(null);
         return;
       }
       if (!appsRes.ok) throw new Error(`HTTP ${appsRes.status}`);
-      if (!settingsRes.ok) throw new Error(`HTTP ${settingsRes.status}`);
+      if (!permsRes.ok) throw new Error(`HTTP ${permsRes.status}`);
       const appsBody = (await appsRes.json()) as QqAppsResponse;
-      const settingsBody =
-        (await settingsRes.json()) as LarkSettingsResponse;
+      const permsBody =
+        (await permsRes.json()) as IntegrationPermissionsResponse;
       setApps(appsBody.apps);
-      setSettings(settingsBody);
+      setPermissions(permsBody);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : t("integrations.appsLoadFailed"),
@@ -77,13 +74,9 @@ export function QqAppAdmin({ onChange }: Props) {
     void refresh();
   }, [refresh]);
 
-  const isAdmin = settings?.role === "admin" || settings?.role === "open";
-  // For QQ the form is visible if the user is admin OR if at least one
-  // owned QQ app is already on the list — we don't have a per-provider
-  // capability endpoint yet, so we fall back to "let the server 403" if
-  // a non-permitted user clicks add.
-  const canManage =
-    isAdmin || apps.some((a) => a.canManage && a.owner === undefined === false);
+  const isAdmin =
+    permissions?.role === "admin" || permissions?.role === "open";
+  const canManage = permissions?.manageApps.includes("qq") ?? false;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +142,7 @@ export function QqAppAdmin({ onChange }: Props) {
     }
   };
 
-  if (!loading && settings === null && apps.length === 0 && !error) {
+  if (!loading && permissions === null && apps.length === 0 && !error) {
     return null;
   }
 

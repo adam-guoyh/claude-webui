@@ -49,6 +49,7 @@ import { handleAbortRequest } from "./handlers/abort.ts";
 import {
   handleAddLarkApp,
   handleAddQqApp,
+  handleGetIntegrationPermissions,
   handleGetLarkSettings,
   handleIssueLinkCode,
   handleListIntegrations,
@@ -375,6 +376,12 @@ export function createApp(
     // via /api/users/:username/permissions.
     app.get("/api/integrations/lark/settings", (c) =>
       handleGetLarkSettings(c, deps),
+    );
+    // Generic per-caller permission map. New UI uses this so each provider
+    // admin card can gate its own form correctly without depending on the
+    // lark-specific settings endpoint.
+    app.get("/api/integrations/permissions", (c) =>
+      handleGetIntegrationPermissions(c, deps),
     );
   } else {
     app.get("/api/integrations", (c) =>

@@ -125,12 +125,37 @@ export async function handleGetLarkSettings(
   const user = c.var.authUser;
   if (!user) return c.json({ error: "Unauthorized" }, 401);
   const role = await resolveRole(c);
-  // canManageApps tells the UI whether to show the add/remove controls for
-  // the calling user. Admins (and open mode) always; regular users only
-  // when an admin has explicitly granted `canManageLarkApps` via
-  // /admin/users.
+  // Legacy single-provider settings endpoint, returns the caller's role +
+  // whether they can manage lark apps. Kept for back-compat; new UI uses
+  // `handleGetIntegrationPermissions` below to get the full per-provider
+  // allowlist in one shot.
   const canManageApps = await canManageProvider(c, role, "lark");
   return c.json({ canManageApps, role });
+}
+
+export async function handleGetIntegrationPermissions(
+  c: Context<ConfigContext>,
+  deps: IntegrationsDeps,
+): Promise<Response> {
+  const user = c.var.authUser;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const role = await resolveRole(c);
+  // Admin / open mode = implicitly manage all registered providers.
+  if (role === "admin" || role === "open") {
+    return c.json({
+      role,
+      manageApps: deps.registry.list().map((p) => p.id),
+    });
+  }
+  // Regular user: derive from the user record. Each provider id the user
+  // has the `manageApps` permission for shows up here, others don't.
+  const allowed: string[] = [];
+  for (const provider of deps.registry.list()) {
+    if (await canManageProvider(c, role, provider.id)) {
+      allowed.push(provider.id);
+    }
+  }
+  return c.json({ role, manageApps: allowed });
 }
 
 export async function handleListLarkApps(

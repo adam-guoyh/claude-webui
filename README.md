@@ -34,17 +34,36 @@ cd claude-webui
 npm --prefix frontend install
 npm --prefix backend install
 
-# 2) Start the backend
-cd backend
+# 2) Start backend + frontend with the bundled helper script
+WEBUI_ADMIN_PASSWORD=changeme scripts/webui.sh start
+# (the script defaults to backend :8081, frontend :3000, the claude binary on
+# PATH, and ~/.claude-webui/users.json — override with env vars)
+```
+
+The script keeps PID files and logs under `~/.claude-webui/run/` and
+`~/.claude-webui/logs/`. Useful subcommands:
+
+```bash
+scripts/webui.sh status                  # show what's running
+scripts/webui.sh restart backend         # restart just the backend
+scripts/webui.sh tail backend            # tail -F backend.log
+scripts/webui.sh stop                    # stop both
+DEBUG=1 scripts/webui.sh restart backend # restart backend with --debug
+scripts/webui.sh --help                  # full env / target reference
+```
+
+If you'd rather drive it manually, the equivalent is:
+
+```bash
+# Backend
 PORT=8081 \
   WEBUI_ADMIN_PASSWORD=changeme \
-  npm run dev -- \
+  npm --prefix backend run dev -- \
     --claude-path "$(which claude)" \
     --users-file ~/.claude-webui/users.json
 
-# 3) In another terminal, the frontend
-cd frontend
-PORT=8081 npm run dev
+# Frontend (separate terminal)
+PORT=8081 npm --prefix frontend run dev
 ```
 
 Open <http://localhost:3000/>, sign in as `admin` with the password you set, and start chatting.

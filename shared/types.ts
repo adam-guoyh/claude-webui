@@ -151,6 +151,14 @@ export interface LarkSettingsResponse {
   role: "admin" | "user" | "open";
 }
 
+/** Generic per-caller view of which integration providers they may manage. */
+export interface IntegrationPermissionsResponse {
+  role: "admin" | "user" | "open";
+  /** Provider ids the calling user is allowed to register / remove own apps
+   *  for. Admins and "open" callers get every registered provider. */
+  manageApps: string[];
+}
+
 // Conversation history types
 // Note: messages are typed as unknown[] to avoid frontend/backend dependency issues
 // Frontend should cast to TimestampedSDKMessage[] (defined in frontend/src/types.ts)
