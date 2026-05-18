@@ -9,10 +9,14 @@
 # Configure via env vars (or edit the defaults at the top of this file):
 #
 #   PORT                 backend port (default 8081)
+#   HOST                 backend bind host (default 127.0.0.1; use 0.0.0.0 for LAN)
 #   CLAUDE_PATH          path to the `claude` binary (default: `which claude`)
 #   USERS_FILE           multi-user file (default: $HOME/.claude-webui/users.json)
 #   WEBUI_ADMIN_PASSWORD bootstrap admin password (no default)
 #   FRONTEND_PORT        Vite dev port (default 3000)
+#   FRONTEND_HOST        Vite bind host (default 0.0.0.0 = LAN-accessible)
+#   VITE_ALLOWED_HOSTS   comma-separated host whitelist for the dev server,
+#                        or "*" to disable (default "*")
 #   DEBUG                set to 1 to add --debug to backend start
 #
 # Usage:
@@ -30,7 +34,9 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 PORT="${PORT:-8081}"
+HOST="${HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 USERS_FILE="${USERS_FILE:-$HOME/.claude-webui/users.json}"
 CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude || true)}"
 DEBUG="${DEBUG:-}"
@@ -66,13 +72,14 @@ start_backend() {
   [[ -x "$CLAUDE_PATH" ]] || die "claude binary not executable: $CLAUDE_PATH"
   mkdir -p "$(dirname "$USERS_FILE")"
 
-  log "starting backend on :$PORT (claude=$CLAUDE_PATH, users=$USERS_FILE)"
+  log "starting backend on $HOST:$PORT (claude=$CLAUDE_PATH, users=$USERS_FILE)"
 
-  # Build cli args. Always has the two flags below, so the array is never
+  # Build cli args. Always has the flags below, so the array is never
   # empty (which would trip `set -u` on bash 3.2 / macOS default).
   local cli_args=(
     --claude-path "$CLAUDE_PATH"
     --users-file "$USERS_FILE"
+    --host "$HOST"
   )
   [[ -n "$DEBUG" ]] && cli_args+=(--debug)
 
@@ -104,12 +111,20 @@ start_frontend() {
     log "frontend already running (pid $(cat "$FRONTEND_PID_FILE"))"
     return 0
   fi
-  log "starting frontend on :$FRONTEND_PORT (proxy backend :$PORT)"
+  log "starting frontend on $FRONTEND_HOST:$FRONTEND_PORT (proxy backend :$PORT)"
   touch "$FRONTEND_LOG"
   (
     cd "$REPO_ROOT"
+    # VITE_ALLOWED_HOSTS gives the dev server permission to answer
+    # requests with the supplied Host header — without it, hitting
+    # http://<lan-ip>:3000 returns "Blocked request" even though the
+    # socket binds to 0.0.0.0. Default to "*" since the dev server
+    # already requires being on the LAN to reach.
     nohup env PORT="$PORT" \
-      npm --prefix frontend run dev -- --port "$FRONTEND_PORT" \
+      VITE_ALLOWED_HOSTS="${VITE_ALLOWED_HOSTS:-*}" \
+      npm --prefix frontend run dev -- \
+        --host "$FRONTEND_HOST" \
+        --port "$FRONTEND_PORT" \
       >>"$FRONTEND_LOG" 2>&1 &
     echo $! >"$FRONTEND_PID_FILE"
     disown 2>/dev/null || true
