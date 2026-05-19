@@ -26,6 +26,12 @@ export interface RunLarkChatOptions {
   ownerToTag?: string;
   permissionMode?: PermissionMode;
   abortController?: AbortController;
+  /**
+   * Called each time Claude emits a `tool_use`. The handler uses this as
+   * a heartbeat signal to nudge the user with a progress message when a
+   * turn drags on. Cheap fire-and-forget; runner never awaits the result.
+   */
+  onToolUse?: (toolName: string) => void;
 }
 
 export interface RunLarkChatResult {
@@ -127,7 +133,14 @@ export async function runLarkChat(
               if (typeof text === "string") assembled += text;
             } else if (itemType === "tool_use") {
               const name = (item as { name?: unknown }).name;
-              if (typeof name === "string") toolNames.push(name);
+              if (typeof name === "string") {
+                toolNames.push(name);
+                try {
+                  options.onToolUse?.(name);
+                } catch {
+                  /* swallow — heartbeat is best-effort */
+                }
+              }
             }
           }
         } else if (typeof content === "string") {

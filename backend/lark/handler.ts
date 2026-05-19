@@ -38,19 +38,26 @@ function buildReply(result: RunLarkChatResult): string {
   }
   if (result.text) return result.text;
   if (result.toolNames.length > 0) {
-    const counts = new Map<string, number>();
-    for (const name of result.toolNames) {
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    }
-    const summary = Array.from(counts.entries())
-      .map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
-      .join(", ");
-    return `✓ Done. Used tools: ${summary}. (No text from the model.)`;
+    return `✓ Done. Used tools: ${summarizeTools(result.toolNames)}. (No text from the model.)`;
   }
   if (result.resultSubtype && result.resultSubtype !== "success") {
     return `Claude stopped: ${result.resultSubtype}. (No text emitted.)`;
   }
   return "(no text response)";
+}
+
+/**
+ * Compact human-readable summary of a list of tool names with counts —
+ * "Read ×3, Edit, Bash ×2". Used in both the final reply when Claude
+ * emits no text, and in the 15s heartbeat when a turn is still running.
+ */
+function summarizeTools(names: string[]): string {
+  if (names.length === 0) return "";
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  return Array.from(counts.entries())
+    .map(([n, c]) => (c > 1 ? `${n} ×${c}` : n))
+    .join(", ");
 }
 
 function relativeTime(iso: string): string {
@@ -434,6 +441,21 @@ export async function handleLarkMessage(
       const placeholder = await cfg
         .sendText(msg.chatId, "Thinking…")
         .catch(() => undefined);
+
+      // One-shot heartbeat: if the turn takes longer than ~15s, post a
+      // single progress message summarising the tools used so far. Caps
+      // at one extra message per turn so we don't spam the chat.
+      const liveTools: string[] = [];
+      let heartbeatSent = false;
+      const heartbeatTimer = setTimeout(() => {
+        heartbeatSent = true;
+        const summary = summarizeTools(liveTools);
+        const body = summary
+          ? `Still working… (used ${summary})`
+          : "Still working…";
+        void cfg.sendText(msg.chatId, body).catch(() => undefined);
+      }, 15_000);
+
       // Default to bypassPermissions for the bot — there's no UI in
       // Feishu to answer per-tool permission prompts, so the SDK's
       // ask-each-time default would hang the turn. Users can opt into
@@ -445,7 +467,10 @@ export async function handleLarkMessage(
         sessionId: binding.sessionId,
         ownerToTag: binding.username,
         permissionMode: binding.permissionMode ?? "bypassPermissions",
+        onToolUse: (name) => liveTools.push(name),
       });
+      clearTimeout(heartbeatTimer);
+      void heartbeatSent;
       // Persist the resolved sessionId so the next turn resumes the same
       // conversation. Idempotent against the on-disk state.
       if (result.sessionId && result.sessionId !== binding.sessionId) {
