@@ -70,6 +70,14 @@ export function IntegrationsPage() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const base = "Claude Code Web UI";
+    document.title = `${t("integrations.title")} · ${base}`;
+    return () => {
+      document.title = base;
+    };
+  }, [t]);
+
   const handleGenerateCode = async (providerId: string) => {
     setIssuing(providerId);
     setError(null);

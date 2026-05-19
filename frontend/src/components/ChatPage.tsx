@@ -48,6 +48,20 @@ export function ChatPage() {
 
   const sessionId = searchParams.get("sessionId");
 
+  // Reflect the current project in the browser tab so a user with
+  // multiple Claude windows open can find the right one. Reset to the
+  // app title on unmount.
+  useEffect(() => {
+    const base = "Claude Code Web UI";
+    const projectName = workingDirectory
+      ? workingDirectory.replace(/\/+$/, "").split("/").pop() || ""
+      : "";
+    document.title = projectName ? `${projectName} · ${base}` : base;
+    return () => {
+      document.title = base;
+    };
+  }, [workingDirectory]);
+
   const { processStreamLine } = useClaudeStreaming();
   const { abortRequest, createAbortHandler } = useAbortController();
 
@@ -441,10 +455,16 @@ export function ChatPage() {
                   <nav aria-label="Breadcrumb">
                     <button
                       onClick={handleBackToProjects}
-                      className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded-md px-1 -mx-1"
+                      className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded-md px-1 -mx-1 truncate max-w-full"
                       aria-label={t("chat.ariaBackToProjects")}
+                      title={workingDirectory || t("app.title")}
                     >
-                      {t("app.title")}
+                      {workingDirectory
+                        ? workingDirectory
+                            .replace(/\/+$/, "")
+                            .split("/")
+                            .pop() || workingDirectory
+                        : t("app.title")}
                     </button>
                   </nav>
                   {workingDirectory && (

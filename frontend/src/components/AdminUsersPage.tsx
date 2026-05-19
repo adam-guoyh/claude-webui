@@ -85,6 +85,14 @@ export function AdminUsersPage() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const base = "Claude Code Web UI";
+    document.title = `${t("adminUsers.title")} · ${base}`;
+    return () => {
+      document.title = base;
+    };
+  }, [t]);
+
   const filteredUsers = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return users;
