@@ -196,7 +196,7 @@ export function LarkAppAdmin({ onChange }: Props) {
             value={form.appId}
             onChange={(e) => setForm((f) => ({ ...f, appId: e.target.value }))}
             placeholder="cli_xxxxxxxx"
-            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoComplete="off"
           />
           <PasswordInput
@@ -205,7 +205,7 @@ export function LarkAppAdmin({ onChange }: Props) {
               setForm((f) => ({ ...f, appSecret: e.target.value }))
             }
             placeholder={t("integrations.appSecretPlaceholder")}
-            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             autoComplete="off"
           />
           <select
@@ -216,7 +216,7 @@ export function LarkAppAdmin({ onChange }: Props) {
                 domain: e.target.value as "feishu" | "lark",
               }))
             }
-            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="feishu">{t("integrations.domainFeishu")}</option>
             <option value="lark">{t("integrations.domainLark")}</option>
@@ -240,7 +240,7 @@ export function LarkAppAdmin({ onChange }: Props) {
               setForm((f) => ({ ...f, displayName: e.target.value }))
             }
             placeholder={t("integrations.appDisplayNamePlaceholder")}
-            className={`${isAdmin ? "sm:col-span-2" : "sm:col-span-4"} rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            className={`${isAdmin ? "sm:col-span-2" : "sm:col-span-4"} rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500`}
             autoComplete="off"
           />
           {isAdmin && (
@@ -251,7 +251,7 @@ export function LarkAppAdmin({ onChange }: Props) {
                 setForm((f) => ({ ...f, owner: e.target.value }))
               }
               placeholder={t("integrations.appOwnerPlaceholder")}
-              className="sm:col-span-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="sm:col-span-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoComplete="off"
               title={t("integrations.appOwnerHint")}
             />

@@ -150,7 +150,7 @@ export function ProjectSelector() {
               value={newPath}
               onChange={(e) => setNewPath(e.target.value)}
               placeholder={t("projectSwitcher.newPlaceholder")}
-              className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoComplete="off"
             />
             <button

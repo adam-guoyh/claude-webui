@@ -176,7 +176,7 @@ export function QqAppAdmin({ onChange }: Props) {
               setForm((f) => ({ ...f, appId: e.target.value }))
             }
             placeholder={t("integrations.qqAppIdPlaceholder")}
-            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoComplete="off"
           />
           <PasswordInput
@@ -185,7 +185,7 @@ export function QqAppAdmin({ onChange }: Props) {
               setForm((f) => ({ ...f, appSecret: e.target.value }))
             }
             placeholder={t("integrations.appSecretPlaceholder")}
-            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+            className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             autoComplete="off"
           />
           <label className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 px-2 py-2 cursor-pointer select-none">
@@ -216,7 +216,7 @@ export function QqAppAdmin({ onChange }: Props) {
               setForm((f) => ({ ...f, displayName: e.target.value }))
             }
             placeholder={t("integrations.appDisplayNamePlaceholder")}
-            className={`${isAdmin ? "sm:col-span-2" : "sm:col-span-4"} rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            className={`${isAdmin ? "sm:col-span-2" : "sm:col-span-4"} rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500`}
             autoComplete="off"
           />
           {isAdmin && (
@@ -227,7 +227,7 @@ export function QqAppAdmin({ onChange }: Props) {
                 setForm((f) => ({ ...f, owner: e.target.value }))
               }
               placeholder={t("integrations.appOwnerPlaceholder")}
-              className="sm:col-span-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="sm:col-span-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoComplete="off"
               title={t("integrations.appOwnerHint")}
             />
