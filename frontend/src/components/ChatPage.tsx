@@ -20,7 +20,7 @@ import { UserMenu } from "./UserMenu";
 import { ChatInput } from "./chat/ChatInput";
 import { ChatMessages } from "./chat/ChatMessages";
 import { SessionSidebar } from "./chat/SessionSidebar";
-import { getChatUrl, getProjectsUrl } from "../config/api";
+import { getChatUrl, getHistoriesUrl, getProjectsUrl } from "../config/api";
 import { authFetch } from "../utils/authFetch";
 import { KEYBOARD_SHORTCUTS } from "../utils/constants";
 import { normalizeWindowsPath } from "../utils/pathUtils";
@@ -48,6 +48,12 @@ export function ChatPage() {
 
   const sessionId = searchParams.get("sessionId");
 
+  // Human-friendly label for the current session. Custom title (admin
+  // renamed it in the sidebar) wins; otherwise the first user-message
+  // preview from the conversation list. Refetched whenever the
+  // sidebar refresh-key bumps so renames flow into the breadcrumb live.
+  const [sessionLabel, setSessionLabel] = useState<string>("");
+
   // Reflect the current project in the browser tab so a user with
   // multiple Claude windows open can find the right one. Reset to the
   // app title on unmount.
@@ -56,11 +62,12 @@ export function ChatPage() {
     const projectName = workingDirectory
       ? workingDirectory.replace(/\/+$/, "").split("/").pop() || ""
       : "";
-    document.title = projectName ? `${projectName} · ${base}` : base;
+    const parts = [projectName, sessionLabel].filter(Boolean);
+    document.title = parts.length ? `${parts.join(" › ")} · ${base}` : base;
     return () => {
       document.title = base;
     };
-  }, [workingDirectory]);
+  }, [workingDirectory, sessionLabel]);
 
   const { processStreamLine } = useClaudeStreaming();
   const { abortRequest, createAbortHandler } = useAbortController();
@@ -97,6 +104,46 @@ export function ChatPage() {
     getEncodedName() || undefined,
     sessionId || undefined,
   );
+
+  // Resolve session label from the histories list. Cheap GET that the
+  // sidebar already makes; we duplicate the request here so the
+  // breadcrumb is independent of sidebar mount state. Refetches when
+  // sessionId / project changes, or when the sidebar bumps the refresh
+  // key (e.g. a rename).
+  useEffect(() => {
+    const enc = getEncodedName();
+    if (!enc || !sessionId) {
+      setSessionLabel("");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authFetch(getHistoriesUrl(enc));
+        if (!res.ok) return;
+        const body = (await res.json()) as {
+          conversations: Array<{
+            sessionId: string;
+            customTitle?: string;
+            lastMessagePreview?: string;
+          }>;
+        };
+        if (cancelled) return;
+        const hit = body.conversations.find((c) => c.sessionId === sessionId);
+        const label =
+          hit?.customTitle ||
+          (hit?.lastMessagePreview
+            ? hit.lastMessagePreview.replace(/\s+/g, " ").slice(0, 60)
+            : "");
+        setSessionLabel(label);
+      } catch {
+        // Best-effort — the breadcrumb just falls back to project-only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getEncodedName, sessionId, historyRefreshKey]);
 
   // Initialize chat state with loaded history
   const {
@@ -452,10 +499,13 @@ export function ChatPage() {
                   <Bars3Icon className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                 </button>
                 <div className="min-w-0">
-                  <nav aria-label="Breadcrumb">
+                  <nav
+                    aria-label="Breadcrumb"
+                    className="flex items-baseline gap-2 min-w-0"
+                  >
                     <button
                       onClick={handleBackToProjects}
-                      className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded-md px-1 -mx-1 truncate max-w-full"
+                      className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded-md px-1 -mx-1 truncate"
                       aria-label={t("chat.ariaBackToProjects")}
                       title={workingDirectory || t("app.title")}
                     >
@@ -466,6 +516,22 @@ export function ChatPage() {
                             .pop() || workingDirectory
                         : t("app.title")}
                     </button>
+                    {sessionLabel && (
+                      <>
+                        <span
+                          className="text-slate-400 dark:text-slate-500 text-lg sm:text-2xl shrink-0"
+                          aria-hidden
+                        >
+                          ›
+                        </span>
+                        <span
+                          className="text-slate-700 dark:text-slate-200 text-base sm:text-2xl font-medium tracking-tight truncate"
+                          title={sessionLabel}
+                        >
+                          {sessionLabel}
+                        </span>
+                      </>
+                    )}
                   </nav>
                   {workingDirectory && (
                     <div className="flex items-center text-sm font-mono mt-1 truncate">
