@@ -213,7 +213,14 @@ export async function handleLarkMessage(
 
   await serializePerUser(lockKey, async () => {
     try {
-      if (trimmed === "" || trimmed === "/help") {
+      if (trimmed === "") {
+        // Empty payloads (bare @-mentions, stripped-stickers, etc.) are
+        // silently dropped instead of auto-replying with HELP_TEXT.
+        // Avoids burning outbound-message quota on noise; the user can
+        // still type /help (or `help` without slash on QQ) to get it.
+        return;
+      }
+      if (trimmed === "/help") {
         await cfg.sendText(msg.chatId, HELP_TEXT);
         return;
       }

@@ -142,13 +142,25 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
         return;
       }
       if (type !== "text") {
-        await sendText(
-          chatId,
-          "Only text messages are supported for now. Send /help for commands.",
-        );
+        // Stickers, images, files, voice, cards etc. all fire the same
+        // receive_v1 event. Don't bother replying — that just burns
+        // outgoing-message quota on noise. The user can /help anytime.
+        logger.cli.debug("Lark non-text event ignored [{app}]: type={type}", {
+          app: label,
+          type,
+        });
         return;
       }
       const text = extractText(content);
+      // Bare @-mentions or otherwise empty payloads land here as "". Same
+      // reasoning: ignore instead of auto-replying with /help, which used
+      // to burn a send for every stray mention.
+      if (!text) {
+        logger.cli.debug("Lark empty-text event ignored [{app}]", {
+          app: label,
+        });
+        return;
+      }
       logger.cli.debug("Lark text extracted [{app}]: {len} chars: {preview}", {
         app: label,
         len: text.length,
