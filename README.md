@@ -9,6 +9,10 @@ A self-hosted web frontend for the [`claude` CLI](https://github.com/anthropics/
 - **Multi-user login** — file-backed accounts with scrypt-hashed passwords. Auto-bootstrapped admin on first start. Each session is owned by the user who started it.
 - **In-UI project management** — browse the filesystem, create, switch and delete projects without leaving the chat. Sessions hang under their project; switching projects re-scopes the sidebar.
 - **Sidebar that scales** — always-visible session list, inline rename, delete, owner badges (admins see everyone's, grouped by owner with collapsible sections).
+- **Paginated history** — opening a session loads the newest 30 messages and lands on the latest reply; a "Load earlier messages" button pulls older messages in 30-message pages, keeping your reading position steady. Big transcripts open fast instead of parsing the whole JSONL up front.
+- **Model picker** — choose Haiku / Sonnet / Opus (or the CLI default) per session from the chat input.
+- **Voice + image input** — dictate via an OpenAI-compatible speech-to-text service (`--stt-url`), and attach images to a turn.
+- **Usage stats** — admin stats page backed by `/api/stats`, broken down by user and model with a configurable time window.
 - **Admin tooling** — dedicated `/admin/users` page for adding / removing accounts; admin-only "move session" dialog that searches the real user list.
 - **i18n** — English + 简体中文 out of the box. Detect from browser, override in Settings.
 - **Backward-compatible auth fallback** — single shared bearer token via `--auth-token` for hobby setups.
@@ -101,6 +105,7 @@ The backend serves the static SPA itself in production — you only need one pro
 | `--lark-app-secret <s>` | Feishu / Lark app secret                                                                 | _disabled_  |
 | `--lark-domain <name>`  | `feishu` (China, default) or `lark` (international)                                      | `feishu`    |
 | `--lark-default-cwd <p>`| Working directory the bot hands to Claude before `/cd`                                   | `$HOME`     |
+| `--stt-url <url>`       | OpenAI-compatible Speech-to-Text base URL (e.g. `http://localhost:8010`); enables `POST /api/stt` | _disabled_  |
 | `-d, --debug`           | Verbose logging                                                                          | `false`     |
 | `-h, --help`            | Show help                                                                                | —           |
 | `-v, --version`         | Show version                                                                             | —           |
@@ -111,6 +116,7 @@ Environment variables (CLI flag wins if both are set):
 - `WEBUI_AUTH_TOKEN` — same as `--auth-token`
 - `WEBUI_USERS_FILE` — same as `--users-file`
 - `WEBUI_LARK_APP_ID` / `WEBUI_LARK_APP_SECRET` / `WEBUI_LARK_DOMAIN` / `WEBUI_LARK_DEFAULT_CWD` — mirrors of the `--lark-*` flags
+- `WEBUI_STT_URL` — same as `--stt-url`
 - `WEBUI_ADMIN_USERNAME` (default `admin`) and `WEBUI_ADMIN_PASSWORD` — used by the first-run admin bootstrap
 - `VITE_ALLOWED_HOSTS` (dev only) — comma-separated hostnames for Vite's host check, or `*` to disable. Useful when accessing the dev server through a tunnel/custom domain.
 
@@ -228,6 +234,7 @@ DM the bot, or @-mention it in a group. Commands:
 | `/status`                        | Show the current binding (user / cwd / session id)           |
 | `/cd <absolute path>`            | Change the working directory (also starts a fresh session)   |
 | `/new`                           | Start a fresh Claude session under the same directory       |
+| `/model <name>`                  | Pick the Claude model (`haiku` \| `sonnet` \| `opus`, or `default` to clear) |
 | `/help`                          | List commands                                                |
 
 Any plain message is forwarded to Claude under the bound webui account. The bot collects Claude's complete response and posts it as a single Feishu message ("best reply" mode) so multi-paragraph answers and code blocks stay intact. Sessions persist across bot restarts — the bound `sessionId` is stored at `~/.claude-webui/lark-bindings.json`.
@@ -269,19 +276,26 @@ Sessions (under a project):
 
 ```
 GET    /api/projects/:enc/histories                      → { conversations: [...] }
-GET    /api/projects/:enc/histories/:sessionId           full JSONL
+GET    /api/projects/:enc/histories/:sessionId?limit&offset
+                                                         → { sessionId, messages, metadata: { totalMessageCount, ... } }
+                                                         (newest-first window: skips `offset` from the end, returns up
+                                                          to `limit`; defaults limit=30, offset=0)
 PUT    /api/projects/:enc/sessions/:sessionId/title      { title: string | null }
 PUT    /api/projects/:enc/sessions/:sessionId/owner      { owner: string | null }    (admin only)
 DELETE /api/projects/:enc/sessions/:sessionId            owner or admin
 ```
 
-Chat / abort / filesystem:
+Chat / abort / filesystem / speech / stats:
 
 ```
-POST   /api/chat                streaming NDJSON; body { message, sessionId?, requestId, allowedTools?, workingDirectory?, permissionMode? }
+POST   /api/chat                streaming NDJSON; body { message, sessionId?, requestId, allowedTools?, workingDirectory?, permissionMode?, model?, images? }
 POST   /api/abort/:requestId    cancel an in-flight chat
 GET    /api/fs/browse?path=...&showHidden=0|1            → { path, parent, entries: [{ name, isDirectory }] }
+POST   /api/stt                 multipart form-data { file }; proxies to the configured STT service → { text }   (503 if --stt-url unset)
+GET    /api/stats?minutes=N                              → { success, data: { total, recent, window, byUser, byModel, totalTokens, recentTokens } }
 ```
+
+`model` accepts the CLI's short aliases (`haiku` / `sonnet` / `opus`) or a full model id; empty/undefined uses the `claude` CLI default. `images` is an array of base64-encoded attachments (`{ mediaType, data }`, where mediaType is one of jpeg/png/gif/webp).
 
 Integrations (multi-user mode, gated; per-caller):
 
