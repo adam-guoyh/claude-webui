@@ -3,6 +3,7 @@
  * Handles reading and parsing Claude conversation history files
  */
 
+import { stat as fsStat } from "node:fs/promises";
 import type {
   SDKAssistantMessage,
   SDKUserMessage,
@@ -25,17 +26,45 @@ export interface RawHistoryLine {
   requestId?: string;
 }
 
-// Legacy interface maintained for transition period
-// TODO: Remove once all references are updated to use ConversationHistory
+/**
+ * Slim per-file summary returned by `parseAllHistoryFiles` — enough to
+ * group + render the sidebar without holding every parsed JSONL line in
+ * memory. The list endpoint reads every session file in a project, so
+ * keeping the full message array around once made a single request to a
+ * busy project allocate hundreds of MB.
+ */
 export interface ConversationFile {
   sessionId: string;
   filePath: string;
-  messages: RawHistoryLine[];
   messageIds: Set<string>;
   startTime: string;
   lastTime: string;
   messageCount: number;
   lastMessagePreview: string;
+}
+
+/**
+ * mtime+size keyed in-memory cache for parsed JSONL summaries. Hits skip
+ * file IO and JSON.parse entirely. Session files only grow by append, so
+ * the (mtime, size) pair is a faithful "did this change?" signal.
+ */
+const summaryCache = new Map<
+  string,
+  { mtime: number; size: number; data: ConversationFile }
+>();
+const SUMMARY_CACHE_MAX = 256;
+
+function rememberSummary(
+  filePath: string,
+  mtime: number,
+  size: number,
+  data: ConversationFile,
+): void {
+  if (summaryCache.size >= SUMMARY_CACHE_MAX) {
+    const oldest = summaryCache.keys().next().value;
+    if (oldest !== undefined) summaryCache.delete(oldest);
+  }
+  summaryCache.set(filePath, { mtime, size, data });
 }
 
 /**
@@ -45,6 +74,23 @@ export interface ConversationFile {
 async function parseHistoryFile(
   filePath: string,
 ): Promise<ConversationFile | null> {
+  // mtime + size keyed cache. Session JSONL files are append-only so a
+  // (mtime, size) match means "we already have an up-to-date summary for
+  // this file" — skip re-reading and re-parsing entirely.
+  let mtime = 0;
+  let size = 0;
+  try {
+    const info = await fsStat(filePath);
+    mtime = info.mtime?.getTime() ?? 0;
+    size = info.size;
+    const cached = summaryCache.get(filePath);
+    if (cached && cached.mtime === mtime && cached.size === size) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through and let readTextFile surface a real error.
+  }
+
   try {
     const content = await readTextFile(filePath);
     const lines = content
@@ -56,16 +102,16 @@ async function parseHistoryFile(
       return null; // Empty file
     }
 
-    const messages: RawHistoryLine[] = [];
     const messageIds = new Set<string>();
     let startTime = "";
     let lastTime = "";
     let lastMessagePreview = "";
+    let messageCount = 0;
 
     for (const line of lines) {
       try {
         const parsed = JSON.parse(line) as RawHistoryLine;
-        messages.push(parsed);
+        messageCount++;
 
         // Track message IDs from assistant messages
         if (parsed.message?.role === "assistant" && parsed.message?.id) {
@@ -117,16 +163,17 @@ async function parseHistoryFile(
       return null;
     }
 
-    return {
+    const summary: ConversationFile = {
       sessionId,
       filePath,
-      messages,
       messageIds,
       startTime,
       lastTime,
-      messageCount: messages.length,
+      messageCount,
       lastMessagePreview,
     };
+    if (mtime || size) rememberSummary(filePath, mtime, size, summary);
+    return summary;
   } catch (error) {
     logger.history.error(`Failed to read history file ${filePath}: {error}`, {
       error,
@@ -164,16 +211,11 @@ export async function parseAllHistoryFiles(
   historyDir: string,
 ): Promise<ConversationFile[]> {
   const filePaths = await getHistoryFiles(historyDir);
-  const results: ConversationFile[] = [];
-
-  for (const filePath of filePaths) {
-    const parsed = await parseHistoryFile(filePath);
-    if (parsed) {
-      results.push(parsed);
-    }
-  }
-
-  return results;
+  // Parse files in parallel. Each call is mostly file-IO + JSON.parse; the
+  // sequential loop here used to serialise a project's worth of sessions
+  // (10s of MB of JSONL) into one cold start when nothing was cached.
+  const parsed = await Promise.all(filePaths.map((p) => parseHistoryFile(p)));
+  return parsed.filter((x): x is ConversationFile => x !== null);
 }
 
 /**

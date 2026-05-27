@@ -13,6 +13,8 @@ export async function handleConversationRequest(c: Context) {
   try {
     const encodedProjectName = c.req.param("encodedProjectName");
     const sessionId = c.req.param("sessionId");
+    const limitStr = c.req.query("limit");
+    const offsetStr = c.req.query("offset");
 
     if (!encodedProjectName) {
       return c.json({ error: "Encoded project name is required" }, 400);
@@ -26,14 +28,20 @@ export async function handleConversationRequest(c: Context) {
       return c.json({ error: "Invalid encoded project name" }, 400);
     }
 
+    // Parse pagination parameters
+    const limit = limitStr ? Math.min(parseInt(limitStr, 10), 100) : 30; // Max 100 per request
+    const offset = offsetStr ? Math.max(0, parseInt(offsetStr, 10)) : 0;
+
     logger.history.debug(
-      `Fetching conversation details for project: ${encodedProjectName}, session: ${sessionId}`,
+      `Fetching conversation details for project: ${encodedProjectName}, session: ${sessionId}, limit: ${limit}, offset: ${offset}`,
     );
 
-    // Load the specific conversation (already returns processed ConversationHistory)
+    // Load the specific conversation with pagination
     const conversationHistory = await loadConversation(
       encodedProjectName,
       sessionId,
+      limit,
+      offset,
     );
 
     if (!conversationHistory) {

@@ -17,6 +17,12 @@
 #   FRONTEND_HOST        Vite bind host (default 0.0.0.0 = LAN-accessible)
 #   VITE_ALLOWED_HOSTS   comma-separated host whitelist for the dev server,
 #                        or "*" to disable (default "*")
+#   STT_URL              OpenAI-compatible STT service URL for voice input
+#                        e.g. http://localhost:8010  (default: empty = disabled)
+#                        When set to a localhost URL, the service is auto-managed.
+#   STT_CMD              command to launch the STT service
+#                        (default: faster-whisper-server)
+#   STT_MODEL            Whisper model to load (default: Systran/faster-whisper-small)
 #   DEBUG                set to 1 to add --debug to backend start
 #
 # Usage:
@@ -33,12 +39,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
+# Source local env overrides if present (useful when running via bash without .zshrc)
+_ENV_FILE="$HOME/.claude-webui/env"
+# shellcheck disable=SC1090
+[[ -f "$_ENV_FILE" ]] && . "$_ENV_FILE"
+
 PORT="${PORT:-8081}"
 HOST="${HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 USERS_FILE="${USERS_FILE:-$HOME/.claude-webui/users.json}"
 CLAUDE_PATH="${CLAUDE_PATH:-$(command -v claude || true)}"
+STT_URL="${STT_URL:-}"
+STT_MODEL="${STT_MODEL:-Systran/faster-whisper-small}"
+STT_CMD="${STT_CMD:-faster-whisper-server}"
 DEBUG="${DEBUG:-}"
 
 STATE_DIR="$HOME/.claude-webui"
@@ -48,8 +62,15 @@ mkdir -p "$RUN_DIR" "$LOG_DIR"
 
 BACKEND_PID_FILE="$RUN_DIR/backend.pid"
 FRONTEND_PID_FILE="$RUN_DIR/frontend.pid"
+STT_PID_FILE="$RUN_DIR/stt.pid"
 BACKEND_LOG="$LOG_DIR/backend.log"
 FRONTEND_LOG="$LOG_DIR/frontend.log"
+STT_LOG="$LOG_DIR/stt.log"
+
+# Returns 0 (true) when STT_URL is a localhost/127.0.0.1 URL that we should manage.
+stt_is_local() {
+  [[ -n "$STT_URL" ]] && [[ "$STT_URL" =~ ^https?://(localhost|127\.0\.0\.1)(:[0-9]+)? ]]
+}
 
 log()  { printf '\033[36m[webui]\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m[webui]\033[0m %s\n' "$*" >&2; }
@@ -72,7 +93,7 @@ start_backend() {
   [[ -x "$CLAUDE_PATH" ]] || die "claude binary not executable: $CLAUDE_PATH"
   mkdir -p "$(dirname "$USERS_FILE")"
 
-  log "starting backend on $HOST:$PORT (claude=$CLAUDE_PATH, users=$USERS_FILE)"
+  log "starting backend on $HOST:$PORT (claude=$CLAUDE_PATH, users=$USERS_FILE${STT_URL:+, stt=$STT_URL})"
 
   # Build cli args. Always has the flags below, so the array is never
   # empty (which would trip `set -u` on bash 3.2 / macOS default).
@@ -81,6 +102,7 @@ start_backend() {
     --users-file "$USERS_FILE"
     --host "$HOST"
   )
+  [[ -n "$STT_URL" ]] && cli_args+=(--stt-url "$STT_URL")
   [[ -n "$DEBUG" ]] && cli_args+=(--debug)
 
   touch "$BACKEND_LOG"
@@ -103,6 +125,36 @@ start_backend() {
   else
     rm -f "$BACKEND_PID_FILE"
     die "backend failed to launch; tail the log: $BACKEND_LOG"
+  fi
+}
+
+start_stt() {
+  stt_is_local || { log "STT_URL is not a localhost URL — skipping managed STT service"; return 0; }
+  if is_running "$STT_PID_FILE"; then
+    log "stt already running (pid $(cat "$STT_PID_FILE"))"
+    return 0
+  fi
+  # Extract port from STT_URL for the log message
+  local stt_port; stt_port="$(echo "$STT_URL" | grep -oE ':[0-9]+' | tr -d ':' || echo "?")"
+  log "starting STT service on port $stt_port (cmd: $STT_CMD, model: $STT_MODEL)"
+  touch "$STT_LOG"
+  (
+    cd "$REPO_ROOT"
+    # Ensure ~/.local/bin is in PATH for uv-installed tools
+    export PATH="$HOME/.local/bin:$PATH"
+    local port_arg=""
+    [[ "$stt_port" != "?" ]] && port_arg="--port $stt_port"
+    # shellcheck disable=SC2086
+    nohup env STT_MODEL="$STT_MODEL" $STT_CMD $port_arg >>"$STT_LOG" 2>&1 &
+    echo $! >"$STT_PID_FILE"
+    disown 2>/dev/null || true
+  )
+  sleep 2
+  if is_running "$STT_PID_FILE"; then
+    log "stt pid=$(cat "$STT_PID_FILE"), log=$STT_LOG"
+  else
+    rm -f "$STT_PID_FILE"
+    warn "STT service failed to launch; voice input will not work. Check log: $STT_LOG"
   fi
 }
 
@@ -167,8 +219,11 @@ stop_one() {
 }
 
 status() {
-  for pair in "backend:$BACKEND_PID_FILE" "frontend:$FRONTEND_PID_FILE"; do
+  for pair in "backend:$BACKEND_PID_FILE" "frontend:$FRONTEND_PID_FILE" "stt:$STT_PID_FILE"; do
     local name="${pair%%:*}" pid_file="${pair##*:}"
+    if [[ "$name" == "stt" ]] && ! stt_is_local; then
+      continue
+    fi
     if is_running "$pid_file"; then
       printf '%-9s running (pid=%s)\n' "$name" "$(cat "$pid_file")"
     else
@@ -179,6 +234,7 @@ status() {
   echo "logs:"
   echo "  backend  $BACKEND_LOG"
   echo "  frontend $FRONTEND_LOG"
+  stt_is_local && echo "  stt      $STT_LOG"
 }
 
 logs_show() {
@@ -186,6 +242,7 @@ logs_show() {
   case "$which" in
     backend)  cat "$BACKEND_LOG"  ;;
     frontend) cat "$FRONTEND_LOG" ;;
+    stt)      cat "$STT_LOG"      ;;
     *) die "unknown component: $which" ;;
   esac
 }
@@ -195,6 +252,7 @@ logs_tail() {
   case "$which" in
     backend)  tail -F "$BACKEND_LOG"  ;;
     frontend) tail -F "$FRONTEND_LOG" ;;
+    stt)      tail -F "$STT_LOG"      ;;
     *) die "unknown component: $which" ;;
   esac
 }
@@ -207,7 +265,8 @@ case "$cmd" in
     case "$target" in
       backend)   start_backend ;;
       frontend)  start_frontend ;;
-      all)       start_backend; start_frontend ;;
+      stt)       start_stt ;;
+      all)       stt_is_local && start_stt; start_backend; start_frontend ;;
       *) die "unknown target: $target" ;;
     esac
     ;;
@@ -215,7 +274,12 @@ case "$cmd" in
     case "$target" in
       backend)   stop_one backend  "$BACKEND_PID_FILE"  ;;
       frontend)  stop_one frontend "$FRONTEND_PID_FILE" ;;
-      all)       stop_one frontend "$FRONTEND_PID_FILE"; stop_one backend "$BACKEND_PID_FILE" ;;
+      stt)       stop_one stt      "$STT_PID_FILE" ;;
+      all)
+        stop_one frontend "$FRONTEND_PID_FILE"
+        stop_one backend  "$BACKEND_PID_FILE"
+        stt_is_local && stop_one stt "$STT_PID_FILE"
+        ;;
       *) die "unknown target: $target" ;;
     esac
     ;;
@@ -223,9 +287,12 @@ case "$cmd" in
     case "$target" in
       backend)   stop_one backend  "$BACKEND_PID_FILE";  start_backend ;;
       frontend)  stop_one frontend "$FRONTEND_PID_FILE"; start_frontend ;;
+      stt)       stop_one stt "$STT_PID_FILE"; start_stt ;;
       all)
         stop_one frontend "$FRONTEND_PID_FILE"
         stop_one backend  "$BACKEND_PID_FILE"
+        stt_is_local && stop_one stt "$STT_PID_FILE"
+        stt_is_local && start_stt
         start_backend
         start_frontend
         ;;
@@ -233,19 +300,24 @@ case "$cmd" in
     esac
     ;;
   status)  status ;;
-  logs)    logs_show "$target" ;;
-  tail)    logs_tail "$target" ;;
+  logs)    logs_show  "${target:-backend}" ;;
+  tail)    logs_tail  "${target:-backend}" ;;
   -h|--help|help|"")
     cat <<EOF
 Usage: scripts/webui.sh <command> [target]
 
 Commands:
-  start    [backend|frontend|all]   start services (default: all)
-  stop     [backend|frontend|all]   stop services (default: all)
-  restart  [backend|frontend|all]   restart services (default: all)
-  status                            show running state
-  logs     [backend|frontend]       cat the log file (default: backend)
-  tail     [backend|frontend]       tail -F the log file (default: backend)
+  start    [backend|frontend|stt|all]   start services (default: all)
+  stop     [backend|frontend|stt|all]   stop services (default: all)
+  restart  [backend|frontend|stt|all]   restart services (default: all)
+  status                                show running state
+  logs     [backend|frontend|stt]       cat the log file (default: backend)
+  tail     [backend|frontend|stt]       tail -F the log file (default: backend)
+
+Voice input: set STT_URL to a localhost URL to auto-manage the STT service:
+  STT_URL=http://localhost:8010 scripts/webui.sh start
+  STT_CMD="faster-whisper-server"  (default)
+  STT_MODEL="Systran/faster-whisper-small"  (default model)
 
 Env defaults can be overridden inline, e.g.:
   PORT=9000 DEBUG=1 scripts/webui.sh start backend

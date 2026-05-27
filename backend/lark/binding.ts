@@ -37,6 +37,12 @@ export interface LarkBinding {
    * would hang the turn forever. Users can switch via `/perms`.
    */
   permissionMode?: LarkPermissionMode;
+  /**
+   * Per-binding Claude model alias ("haiku" | "sonnet" | "opus") or a full
+   * model id. Undefined ⇒ follow whatever the `claude` CLI default is.
+   * Set via `/model <alias>`.
+   */
+  model?: string;
 }
 
 export interface BindingFile {
@@ -94,6 +100,10 @@ async function loadFromDisk(path: string): Promise<BindingFile> {
           permissionMode: normalizeMode(
             (v as { permissionMode?: unknown }).permissionMode,
           ),
+          model:
+            typeof (v as { model?: unknown }).model === "string"
+              ? ((v as { model?: string }).model as string)
+              : undefined,
         };
       }
       return out;
@@ -113,6 +123,10 @@ async function loadFromDisk(path: string): Promise<BindingFile> {
           permissionMode: normalizeMode(
             (v as { permissionMode?: unknown }).permissionMode,
           ),
+          model:
+            typeof (v as { model?: unknown }).model === "string"
+              ? ((v as { model?: string }).model as string)
+              : undefined,
         };
       }
     }

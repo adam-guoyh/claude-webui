@@ -23,6 +23,8 @@ export interface ParsedArgs {
   larkDomain?: "feishu" | "lark";
   /** Working directory the bot hands to Claude by default. */
   larkDefaultCwd?: string;
+  /** OpenAI-compatible STT service base URL (e.g. http://localhost:8010). */
+  sttUrl?: string;
 }
 
 export function parseCliArgs(): ParsedArgs {
@@ -82,6 +84,10 @@ export function parseCliArgs(): ParsedArgs {
       "--lark-default-cwd <path>",
       "Default working directory the Lark bot hands to Claude before /cd (also reads WEBUI_LARK_DEFAULT_CWD)",
     )
+    .option(
+      "--stt-url <url>",
+      "OpenAI-compatible Speech-to-Text service base URL, e.g. http://localhost:8010 (also reads WEBUI_STT_URL env var)",
+    )
     .option("-d, --debug", "Enable debug mode", false);
 
   // Parse arguments - Commander.js v14 handles this automatically
@@ -112,6 +118,8 @@ export function parseCliArgs(): ParsedArgs {
   const larkDefaultCwd =
     options.larkDefaultCwd || getEnv("WEBUI_LARK_DEFAULT_CWD") || undefined;
 
+  const sttUrl = options.sttUrl || getEnv("WEBUI_STT_URL") || undefined;
+
   return {
     debug: options.debug || debugFromEnv,
     port: options.port,
@@ -123,5 +131,6 @@ export function parseCliArgs(): ParsedArgs {
     larkAppSecret,
     larkDomain,
     larkDefaultCwd,
+    sttUrl,
   };
 }

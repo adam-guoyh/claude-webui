@@ -16,6 +16,7 @@ import {
   type LarkBinding,
 } from "./binding.ts";
 import { runLarkChat, type RunLarkChatResult } from "./runner.ts";
+import type { AttachedImage } from "../utils/imagePrompt.ts";
 import { listUserSessionsInCwd, type SessionRow } from "./sessions.ts";
 import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 
@@ -26,6 +27,20 @@ const VALID_PERM_MODES = [
   "plan",
 ] as const;
 type PermMode = (typeof VALID_PERM_MODES)[number];
+
+/**
+ * Known Claude model aliases for `/model <name>`. We keep this to the short
+ * aliases the CLI itself accepts ("haiku" | "sonnet" | "opus") + "default"
+ * to clear the override. Full model ids are also accepted as a passthrough
+ * for advanced users — see `KNOWN_MODEL_PREFIXES`.
+ */
+const SHORT_MODEL_ALIASES = ["haiku", "sonnet", "opus"] as const;
+const KNOWN_MODEL_PREFIXES = ["claude-"];
+
+function isValidModelAlias(v: string): boolean {
+  if ((SHORT_MODEL_ALIASES as readonly string[]).includes(v)) return true;
+  return KNOWN_MODEL_PREFIXES.some((p) => v.startsWith(p));
+}
 
 /**
  * Build the user-facing reply for a Claude turn. Falls back to a tool
@@ -109,7 +124,20 @@ interface IncomingMessage {
   chatId: string;
   /** Already-stripped plain text (the @bot mention prefix has been removed). */
   text: string;
+  /** Platform message id — used for dedup so retried deliveries aren't re-processed. */
+  messageId?: string;
+  /** Images attached to this turn (base64-encoded). */
+  images?: AttachedImage[];
 }
+
+/**
+ * Feishu (and QQ) guarantee at-least-once delivery: on connection drops or
+ * server restarts the WSClient replays unacknowledged messages with the same
+ * message_id. We keep a rolling window of recently-seen ids (max 512, scoped
+ * to process lifetime) to silently drop retries.
+ */
+const seenMessageIds = new Set<string>();
+const SEEN_MAX = 512;
 
 /**
  * Best-effort lock so the same user can't pipeline overlapping turns into
@@ -151,6 +179,7 @@ const KNOWN_COMMANDS = new Set([
   "resume",
   "new",
   "perms",
+  "model",
 ]);
 
 function normalizeCommand(input: string): string {
@@ -166,6 +195,7 @@ function statusLine(binding: LarkBinding): string {
     `cwd:       ${binding.cwd}`,
     `session:   ${binding.sessionId ? binding.sessionId.slice(0, 8) + "…" : "(new)"}`,
     `perms:     ${binding.permissionMode ?? "bypassPermissions (default)"}`,
+    `model:     ${binding.model ?? "(CLI default)"}`,
   ].join("\n");
 }
 
@@ -180,6 +210,7 @@ const HELP_TEXT = [
   "/resume <sessionId or 8-char>  continue an existing webui session",
   "/new                           start a fresh Claude session",
   "/perms <mode>                  set Claude permission mode (default | acceptEdits | bypassPermissions | plan)",
+  "/model <name>                  pick Claude model (haiku | sonnet | opus | default to clear)",
   "/help                          show this message",
   "",
   "Plain messages are forwarded to Claude under your bound account.",
@@ -195,6 +226,21 @@ export async function handleLarkMessage(
   msg: IncomingMessage,
   cfg: LarkHandlerConfig,
 ): Promise<void> {
+  // Dedup: silently drop retried deliveries we've already processed.
+  if (msg.messageId) {
+    if (seenMessageIds.has(msg.messageId)) {
+      logger.cli.debug("Lark dedup: dropping already-seen message [{id}]", {
+        id: msg.messageId,
+      });
+      return;
+    }
+    if (seenMessageIds.size >= SEEN_MAX) {
+      const oldest = seenMessageIds.values().next().value;
+      if (oldest !== undefined) seenMessageIds.delete(oldest);
+    }
+    seenMessageIds.add(msg.messageId);
+  }
+
   const trimmed = normalizeCommand(msg.text.trim());
   const binding = await getBinding(cfg.bindingPath, cfg.appId, msg.openId);
   const lockKey = binding
@@ -213,7 +259,7 @@ export async function handleLarkMessage(
 
   await serializePerUser(lockKey, async () => {
     try {
-      if (trimmed === "") {
+      if (trimmed === "" && !(msg.images && msg.images.length > 0)) {
         // Empty payloads (bare @-mentions, stripped-stickers, etc.) are
         // silently dropped instead of auto-replying with HELP_TEXT.
         // Avoids burning outbound-message quota on noise; the user can
@@ -400,6 +446,40 @@ export async function handleLarkMessage(
         return;
       }
 
+      if (trimmed.startsWith("/model ") || trimmed === "/model") {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length !== 2) {
+          await cfg.sendText(
+            msg.chatId,
+            `Usage: /model <name>   names: ${SHORT_MODEL_ALIASES.join(" | ")} | default (clear override)`,
+          );
+          return;
+        }
+        const raw = parts[1].toLowerCase();
+        if (raw === "default" || raw === "auto" || raw === "clear") {
+          await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
+            model: undefined,
+          });
+          await cfg.sendText(
+            msg.chatId,
+            "Model override cleared. Falling back to CLI default.",
+          );
+          return;
+        }
+        if (!isValidModelAlias(raw)) {
+          await cfg.sendText(
+            msg.chatId,
+            `Unknown model "${parts[1]}". Pick one of: ${SHORT_MODEL_ALIASES.join(" | ")}, or pass a full model id starting with "claude-".`,
+          );
+          return;
+        }
+        await updateBinding(cfg.bindingPath, cfg.appId, msg.openId, {
+          model: raw,
+        });
+        await cfg.sendText(msg.chatId, `Model → ${raw}.`);
+        return;
+      }
+
       if (trimmed.startsWith("/perms ") || trimmed === "/perms") {
         const parts = trimmed.split(/\s+/);
         if (parts.length !== 2) {
@@ -474,6 +554,8 @@ export async function handleLarkMessage(
         sessionId: binding.sessionId,
         ownerToTag: binding.username,
         permissionMode: binding.permissionMode ?? "bypassPermissions",
+        model: binding.model,
+        images: msg.images,
         onToolUse: (name) => liveTools.push(name),
       });
       clearTimeout(heartbeatTimer);

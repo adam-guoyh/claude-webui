@@ -4,8 +4,16 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import { existsSync, readFileSync } from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const certFile = resolve(__dirname, "certs/cert.pem");
+const keyFile = resolve(__dirname, "certs/key.pem");
+const httpsConfig =
+  existsSync(certFile) && existsSync(keyFile)
+    ? { cert: readFileSync(certFile), key: readFileSync(keyFile) }
+    : undefined;
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -34,6 +42,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
+      ...(httpsConfig ? { https: httpsConfig } : {}),
       ...(allowedHosts !== undefined ? { allowedHosts } : {}),
       proxy: {
         "/api": {

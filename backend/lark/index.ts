@@ -11,6 +11,7 @@ import * as lark from "@larksuiteoapi/node-sdk";
 import { logger } from "../utils/logger.ts";
 import { defaultBindingPath } from "./binding.ts";
 import { handleLarkMessage, type LarkHandlerConfig } from "./handler.ts";
+import type { AttachedImage } from "../utils/imagePrompt.ts";
 import type { LinkCodeStore } from "../integrations/linkCodes.ts";
 
 export interface LarkConfig {
@@ -122,6 +123,7 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
       const ev = data;
       const openId = ev?.sender?.sender_id?.open_id;
       const chatId = ev?.message?.chat_id;
+      const messageId = ev?.message?.message_id;
       const content = ev?.message?.content;
       const type = ev?.message?.message_type;
       logger.cli.debug(
@@ -141,10 +143,56 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
         );
         return;
       }
+      if (type === "image") {
+        // Download the image and forward it to Claude for analysis.
+        try {
+          const imageContent = JSON.parse(content) as { image_key?: string };
+          const fileKey = imageContent.image_key;
+          const msgId = ev?.message?.message_id;
+          if (!fileKey || !openId || !chatId || !msgId) return;
+          const resource = await client.im.messageResource.get({
+            params: { type: "image" },
+            path: { message_id: msgId, file_key: fileKey },
+          });
+          const stream = resource.getReadableStream();
+          const chunks: Buffer[] = [];
+          for await (const chunk of stream) {
+            chunks.push(
+              Buffer.isBuffer(chunk)
+                ? chunk
+                : Buffer.from(chunk as ArrayBuffer),
+            );
+          }
+          const imageData = Buffer.concat(chunks).toString("base64");
+          const rawCt: string =
+            (resource.headers as Record<string, string>)?.["content-type"] ??
+            "image/jpeg";
+          const mediaType = (
+            rawCt.startsWith("image/")
+              ? rawCt.split(";")[0].trim()
+              : "image/jpeg"
+          ) as AttachedImage["mediaType"];
+          await handleLarkMessage(
+            {
+              openId,
+              chatId,
+              text: "",
+              messageId,
+              images: [{ data: imageData, mediaType }],
+            },
+            handlerConfig,
+          );
+        } catch (e) {
+          logger.cli.error("Failed to process Feishu image: {error}", {
+            error: e,
+          });
+        }
+        return;
+      }
       if (type !== "text") {
-        // Stickers, images, files, voice, cards etc. all fire the same
-        // receive_v1 event. Don't bother replying — that just burns
-        // outgoing-message quota on noise. The user can /help anytime.
+        // Stickers, files, voice, cards etc. all fire the same receive_v1
+        // event. Don't bother replying — that just burns outgoing-message
+        // quota on noise. The user can /help anytime.
         logger.cli.debug("Lark non-text event ignored [{app}]: type={type}", {
           app: label,
           type,
@@ -166,7 +214,10 @@ export function startLarkBot(cfg: LarkConfig): LarkBotHandle {
         len: text.length,
         preview: text.length > 80 ? text.slice(0, 80) + "…" : text,
       });
-      await handleLarkMessage({ openId, chatId, text }, handlerConfig);
+      await handleLarkMessage(
+        { openId, chatId, text, messageId },
+        handlerConfig,
+      );
     },
   });
 

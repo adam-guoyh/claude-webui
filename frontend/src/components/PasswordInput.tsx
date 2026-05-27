@@ -2,7 +2,8 @@ import { useState } from "react";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 
-interface Props extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+interface Props
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
   /** Overrides the default outer wrapper className. */
   wrapperClassName?: string;
 }

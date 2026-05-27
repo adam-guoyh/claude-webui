@@ -234,15 +234,36 @@ export function convertTimestampedSDKMessage(
 }
 
 /**
- * Convert an array of TimestampedSDKMessages to AllMessage array
+ * Convert an array of messages to AllMessage array
  * Used for batch conversion of conversation history
- * Now uses UnifiedMessageProcessor's batch processing for optimal performance and consistency
+ * Handles both TimestampedSDKMessage[] and unknown[] with inline type validation
+ * for better performance (single pass instead of pre-filtering)
  */
 export function convertConversationHistory(
-  timestampedMessages: TimestampedSDKMessage[],
+  messages: unknown[],
 ): AllMessage[] {
   const processor = new UnifiedMessageProcessor();
+  const validMessages: TimestampedSDKMessage[] = [];
+
+  // Single pass: validate and collect valid messages
+  for (const msg of messages) {
+    if (
+      typeof msg === "object" &&
+      msg !== null &&
+      "type" in msg &&
+      "timestamp" in msg &&
+      typeof (msg as { timestamp: unknown }).timestamp === "string"
+    ) {
+      validMessages.push(msg as TimestampedSDKMessage);
+    } else if (typeof msg === "object" && msg !== null && "type" in msg) {
+      // Log messages that have type but missing timestamp for debugging
+      console.warn(
+        `Skipping message with type '${(msg as { type: unknown }).type}' - missing timestamp`,
+        msg,
+      );
+    }
+  }
 
   // Use the unified processor's batch processing method
-  return processor.processMessagesBatch(timestampedMessages);
+  return processor.processMessagesBatch(validMessages);
 }

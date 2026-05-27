@@ -188,9 +188,7 @@ export function AdminUsersPage() {
         throw new Error(body.error || `HTTP ${res.status}`);
       }
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Failed to update permission",
-      );
+      setError(e instanceof Error ? e.message : "Failed to update permission");
       // Roll back optimistic update.
       await refresh();
     }
@@ -213,6 +211,13 @@ export function AdminUsersPage() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/admin/stats")}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
+              title="View API usage statistics"
+            >
+              📊 Stats
+            </button>
             <UserMenu />
             <SettingsButton onClick={() => setIsSettingsOpen(true)} />
           </div>

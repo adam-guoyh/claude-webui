@@ -75,8 +75,7 @@ export function QqAppAdmin({ onChange }: Props) {
     void refresh();
   }, [refresh]);
 
-  const isAdmin =
-    permissions?.role === "admin" || permissions?.role === "open";
+  const isAdmin = permissions?.role === "admin" || permissions?.role === "open";
   const canManage = permissions?.manageApps.includes("qq") ?? false;
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -172,9 +171,7 @@ export function QqAppAdmin({ onChange }: Props) {
           <input
             type="text"
             value={form.appId}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, appId: e.target.value }))
-            }
+            onChange={(e) => setForm((f) => ({ ...f, appId: e.target.value }))}
             placeholder={t("integrations.qqAppIdPlaceholder")}
             className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoComplete="off"
@@ -207,7 +204,9 @@ export function QqAppAdmin({ onChange }: Props) {
             className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <PlusIcon className="w-4 h-4" />
-            {submitting ? t("integrations.appAdding") : t("integrations.appAdd")}
+            {submitting
+              ? t("integrations.appAdding")
+              : t("integrations.appAdd")}
           </button>
           <input
             type="text"

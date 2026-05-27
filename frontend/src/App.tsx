@@ -6,6 +6,7 @@ import { Login } from "./components/Login";
 import { RequireAuth } from "./components/RequireAuth";
 import { RequireAdmin } from "./components/RequireAdmin";
 import { AdminUsersPage } from "./components/AdminUsersPage";
+import { AdminStatsPage } from "./components/AdminStatsPage";
 import { IntegrationsPage } from "./components/IntegrationsPage";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -48,6 +49,14 @@ function App() {
               element={
                 <RequireAdmin>
                   <AdminUsersPage />
+                </RequireAdmin>
+              }
+            />
+            <Route
+              path="/admin/stats"
+              element={
+                <RequireAdmin>
+                  <AdminStatsPage />
                 </RequireAdmin>
               }
             />

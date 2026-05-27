@@ -83,8 +83,7 @@ export function LarkAppAdmin({ onChange }: Props) {
     void refresh();
   }, [refresh]);
 
-  const isAdmin =
-    permissions?.role === "admin" || permissions?.role === "open";
+  const isAdmin = permissions?.role === "admin" || permissions?.role === "open";
   const canManage = permissions?.manageApps.includes("lark") ?? false;
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -136,9 +135,7 @@ export function LarkAppAdmin({ onChange }: Props) {
     setError(null);
     try {
       const res = await authFetch(
-        getApiUrl(
-          `/api/integrations/lark/apps/${encodeURIComponent(app.id)}`,
-        ),
+        getApiUrl(`/api/integrations/lark/apps/${encodeURIComponent(app.id)}`),
         { method: "DELETE" },
       );
       if (!res.ok) {

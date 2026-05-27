@@ -73,10 +73,7 @@ export function ProviderPermissionMenu({
     if (!open) return;
     const onMouseDown = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (
-        buttonRef.current?.contains(t) ||
-        popoverRef.current?.contains(t)
-      ) {
+      if (buttonRef.current?.contains(t) || popoverRef.current?.contains(t)) {
         return;
       }
       setOpen(false);

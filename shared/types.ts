@@ -4,6 +4,13 @@ export interface StreamResponse {
   error?: string;
 }
 
+/** A single base64-encoded image attached to a chat turn. */
+export interface AttachedImage {
+  /** Raw base64 bytes — no `data:...;base64,` prefix. */
+  data: string;
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+}
+
 export interface ChatRequest {
   message: string;
   sessionId?: string;
@@ -11,6 +18,14 @@ export interface ChatRequest {
   allowedTools?: string[];
   workingDirectory?: string;
   permissionMode?: "default" | "plan" | "acceptEdits";
+  /**
+   * Claude model alias to use for this turn. Accepts the CLI's short aliases
+   * ("haiku" | "sonnet" | "opus") or a full model id; empty/undefined falls
+   * back to whatever the `claude` CLI's own default model is.
+   */
+  model?: string;
+  /** Images attached to this turn (base64-encoded). */
+  images?: AttachedImage[];
 }
 
 export interface AbortRequest {
@@ -169,5 +184,6 @@ export interface ConversationHistory {
     startTime: string;
     endTime: string;
     messageCount: number;
+    totalMessageCount?: number; // Total messages in the session (for pagination)
   };
 }

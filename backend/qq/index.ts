@@ -18,6 +18,7 @@ import {
   type GroupMessageEvent,
   type PrivateMessageEvent,
 } from "qq-official-bot";
+import type { AttachedImage } from "../utils/imagePrompt.ts";
 import { logger } from "../utils/logger.ts";
 import {
   handleLarkMessage as handleMessage,
@@ -118,17 +119,61 @@ export function startQqBot(cfg: QqConfig): QqBotHandle {
     pending.set(chatId, e);
     try {
       const text = cleanText(e.raw_message || "");
+
+      // Extract images from QQ message elements.
+      const images: AttachedImage[] = [];
+      const elems = Array.isArray(e.message) ? e.message : [e.message];
+      for (const elem of elems) {
+        if (
+          elem &&
+          typeof elem === "object" &&
+          "type" in elem &&
+          (elem as { type: string }).type === "image"
+        ) {
+          const imgData = (
+            elem as {
+              type: string;
+              data: { file?: string | Buffer; url?: string };
+            }
+          ).data;
+          const url =
+            imgData.url ??
+            (typeof imgData.file === "string" &&
+            (imgData.file.startsWith("http://") ||
+              imgData.file.startsWith("https://"))
+              ? imgData.file
+              : undefined);
+          if (url) {
+            try {
+              const resp = await fetch(url);
+              const buf = Buffer.from(await resp.arrayBuffer());
+              const ct = resp.headers.get("content-type") ?? "image/jpeg";
+              const mediaType = (
+                ct.startsWith("image/") ? ct.split(";")[0].trim() : "image/jpeg"
+              ) as AttachedImage["mediaType"];
+              images.push({ data: buf.toString("base64"), mediaType });
+            } catch {
+              // Skip images that fail to download — don't abort the whole turn.
+            }
+          }
+        }
+      }
+
       logger.cli.debug(
-        "QQ event received [{app}]: type={type} openId={openId} chat={chat} text={preview}",
+        "QQ event received [{app}]: type={type} openId={openId} chat={chat} text={preview} images={imgs}",
         {
           app: label,
           type: e.message_type,
           openId: e.user_id,
           chat: chatId,
           preview: text.length > 60 ? text.slice(0, 60) + "…" : text,
+          imgs: images.length,
         },
       );
-      await handleMessage({ openId: e.user_id, chatId, text }, handlerConfig);
+      await handleMessage(
+        { openId: e.user_id, chatId, text, messageId: e.message_id, images },
+        handlerConfig,
+      );
     } finally {
       pending.delete(chatId);
     }

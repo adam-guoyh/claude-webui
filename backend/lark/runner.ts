@@ -15,6 +15,7 @@ import { query, type PermissionMode } from "@anthropic-ai/claude-code";
 import { getEncodedProjectName } from "../history/pathUtils.ts";
 import { setOwner } from "../history/ownershipStore.ts";
 import { logger } from "../utils/logger.ts";
+import { buildImagePrompt, type AttachedImage } from "../utils/imagePrompt.ts";
 
 export interface RunLarkChatOptions {
   message: string;
@@ -25,6 +26,11 @@ export interface RunLarkChatOptions {
   /** Webui username to record as owner of the resolved session. */
   ownerToTag?: string;
   permissionMode?: PermissionMode;
+  /** Optional Claude model alias ("haiku" | "sonnet" | "opus") or full id;
+   *  undefined falls back to whatever the `claude` CLI default is. */
+  model?: string;
+  /** Images attached to this turn (base64-encoded). */
+  images?: AttachedImage[];
   abortController?: AbortController;
   /**
    * Called each time Claude emits a `tool_use`. The handler uses this as
@@ -70,6 +76,8 @@ export async function runLarkChat(
     sessionId,
     ownerToTag,
     permissionMode,
+    model,
+    images,
     abortController,
   } = options;
 
@@ -81,8 +89,16 @@ export async function runLarkChat(
   const stderrChunks: string[] = [];
 
   try {
+    const processedMessage = message.startsWith("/")
+      ? message.substring(1)
+      : message;
+    const prompt =
+      images && images.length > 0
+        ? buildImagePrompt(processedMessage, images, sessionId)
+        : processedMessage;
+
     for await (const sdkMessage of query({
-      prompt: message.startsWith("/") ? message.substring(1) : message,
+      prompt,
       options: {
         abortController: abortController ?? new AbortController(),
         executable: "node" as const,
@@ -95,6 +111,7 @@ export async function runLarkChat(
         ...(sessionId ? { resume: sessionId } : {}),
         cwd: workingDirectory,
         ...(permissionMode ? { permissionMode } : {}),
+        ...(model ? { model } : {}),
       },
     })) {
       const sid = (sdkMessage as { session_id?: unknown }).session_id;

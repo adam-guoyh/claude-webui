@@ -4,6 +4,8 @@ import type { ChatRequest, StreamResponse } from "../../shared/types.ts";
 import { getEncodedProjectName } from "../history/pathUtils.ts";
 import { setOwner } from "../history/ownershipStore.ts";
 import { logger } from "../utils/logger.ts";
+import { buildImagePrompt, type AttachedImage } from "../utils/imagePrompt.ts";
+import { recordUsage } from "../utils/usageStats.ts";
 
 /**
  * Executes a Claude command and yields streaming responses
@@ -29,6 +31,11 @@ async function* executeClaudeCommand(
   /** When set, ownership is recorded for the resolved sessionId after the
    *  first SDK message that carries one. */
   ownerToTag?: string,
+  /** Optional Claude model alias ("haiku" | "sonnet" | "opus") or full id;
+   *  passes straight through to the SDK. Falls back to CLI default. */
+  model?: string,
+  /** Images attached to this turn (base64-encoded). */
+  images?: AttachedImage[],
 ): AsyncGenerator<StreamResponse> {
   let abortController: AbortController;
 
@@ -65,9 +72,23 @@ async function* executeClaudeCommand(
     // configured path has no JS extension (.js/.mjs/.tsx/.ts/.jsx). The
     // `executable` option is ignored in the native case, so it is safe to
     // leave set for both.
+    const MODEL_ALIASES: Record<string, string> = {
+      haiku: "claude-haiku-4-5-20251001",
+      sonnet: "claude-sonnet-4-6",
+      opus: "claude-opus-4-7",
+    };
+    const resolvedModel = model
+      ? (MODEL_ALIASES[model.toLowerCase()] ?? model)
+      : undefined;
+
+    const prompt =
+      images && images.length > 0
+        ? buildImagePrompt(processedMessage, images, sessionId)
+        : processedMessage;
+
     try {
       for await (const sdkMessage of query({
-        prompt: processedMessage,
+        prompt,
         options: {
           abortController,
           executable: "node" as const,
@@ -78,6 +99,7 @@ async function* executeClaudeCommand(
           ...(allowedTools ? { allowedTools } : {}),
           ...(workingDirectory ? { cwd: workingDirectory } : {}),
           ...(permissionMode ? { permissionMode } : {}),
+          ...(resolvedModel ? { model: resolvedModel } : {}),
         },
       })) {
         // Debug logging of raw SDK messages with detailed content
@@ -163,6 +185,7 @@ export async function handleChatRequest(
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        const results: Array<{ usage: Record<string, unknown> }> = [];
         for await (const chunk of executeClaudeCommand(
           chatRequest.message,
           chatRequest.requestId,
@@ -173,9 +196,41 @@ export async function handleChatRequest(
           chatRequest.workingDirectory,
           chatRequest.permissionMode,
           authUser,
+          chatRequest.model,
+          chatRequest.images,
         )) {
           const data = JSON.stringify(chunk) + "\n";
           controller.enqueue(new TextEncoder().encode(data));
+
+          // Collect all Result messages for separate recording
+          if (chunk.type === "claude_json") {
+            const msg = chunk.data as Record<string, unknown>;
+            if (msg.type === "result") {
+              const usage = msg.usage as Record<string, unknown>;
+              if (usage) {
+                results.push({ usage });
+              }
+            }
+          }
+        }
+        // Record usage for each Result separately
+        try {
+          for (const result of results) {
+            const inputTokens =
+              ((result.usage.input_tokens ?? 0) as number) +
+              ((result.usage.cache_creation_input_tokens ?? 0) as number) +
+              ((result.usage.cache_read_input_tokens ?? 0) as number);
+            const outputTokens = (result.usage.output_tokens ?? 0) as number;
+            recordUsage(
+              chatRequest.model || "default",
+              authUser,
+              undefined,
+              inputTokens,
+              outputTokens,
+            );
+          }
+        } catch (e) {
+          logger.chat.debug("Failed to record usage: {error}", { error: e });
         }
         controller.close();
       } catch (error) {

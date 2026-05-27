@@ -75,6 +75,7 @@ function migrateLegacySettings(): AppSettings {
   const migratedSettings: AppSettings = {
     theme: legacyTheme,
     enterBehavior: legacyEnterBehavior,
+    model: "default",
     version: CURRENT_SETTINGS_VERSION,
   };
 

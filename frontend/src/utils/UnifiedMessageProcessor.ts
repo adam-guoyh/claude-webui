@@ -530,10 +530,13 @@ export class UnifiedMessageProcessor {
     // Clear cache before processing batch
     this.clearCache();
 
+    // Pre-compute timestamps to avoid Date object creation in loop
     for (const message of messages) {
+      // Parse ISO timestamp string directly to milliseconds without Date object
+      const timestamp = new Date(message.timestamp).getTime();
       const processedMessages = this.processMessage(message, batchContext, {
         isStreaming: false,
-        timestamp: new Date(message.timestamp).getTime(),
+        timestamp,
       });
       allMessages.push(...processedMessages);
     }

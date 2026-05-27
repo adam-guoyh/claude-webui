@@ -104,6 +104,7 @@ async function main(runtime: NodeRuntime) {
     cliPath,
     authToken: args.authToken,
     usersFile: args.usersFile,
+    sttUrl: args.sttUrl,
     integrations: {
       registry: integrationRegistry,
       codes: linkCodes,

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import type { AppSettings, SettingsContextType } from "../types/settings";
+import type {
+  AppSettings,
+  ModelChoice,
+  SettingsContextType,
+} from "../types/settings";
 import { getSettings, setSettings } from "../utils/storage";
 import { SettingsContext } from "./SettingsContextTypes";
 
@@ -48,16 +52,25 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     });
   }, [settings.enterBehavior, updateSettings]);
 
+  const setModel = useCallback(
+    (model: ModelChoice) => {
+      updateSettings({ model });
+    },
+    [updateSettings],
+  );
+
   const value = useMemo(
     (): SettingsContextType => ({
       settings,
       theme: settings.theme,
       enterBehavior: settings.enterBehavior,
+      model: settings.model ?? "default",
       toggleTheme,
       toggleEnterBehavior,
+      setModel,
       updateSettings,
     }),
-    [settings, toggleTheme, toggleEnterBehavior, updateSettings],
+    [settings, toggleTheme, toggleEnterBehavior, setModel, updateSettings],
   );
 
   return (

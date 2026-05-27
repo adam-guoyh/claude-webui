@@ -92,6 +92,7 @@ async function main(runtime: DenoRuntime) {
     cliPath: cliPath,
     authToken: args.authToken,
     usersFile: args.usersFile,
+    sttUrl: args.sttUrl,
     integrations: {
       registry: integrationRegistry,
       codes: linkCodes,

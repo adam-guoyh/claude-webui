@@ -45,7 +45,9 @@ import {
 } from "./handlers/histories.ts";
 import { handleConversationRequest } from "./handlers/conversations.ts";
 import { handleChatRequest } from "./handlers/chat.ts";
+import { handleSttRequest } from "./handlers/stt.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
+import { handleStatsRequest } from "./handlers/stats.ts";
 import {
   handleAddLarkApp,
   handleAddQqApp,
@@ -71,6 +73,8 @@ export interface AppConfig {
   usersFile?: string;
   /** Optional — present when at least one IM provider is configured. */
   integrations?: IntegrationsDeps;
+  /** OpenAI-compatible STT service base URL. When set, POST /api/stt is enabled. */
+  sttUrl?: string;
 }
 
 export function createApp(
@@ -339,6 +343,10 @@ export function createApp(
   );
 
   app.post("/api/chat", (c) => handleChatRequest(c, requestAbortControllers));
+
+  app.post("/api/stt", (c) => handleSttRequest(c, config.sttUrl));
+
+  app.get("/api/stats", (c) => handleStatsRequest(c));
 
   // Integrations (IM account ↔ webui user). Only mounted in multi-user mode
   // since each binding has to belong to a real user; without a users file

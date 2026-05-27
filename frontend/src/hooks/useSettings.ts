@@ -21,5 +21,10 @@ export function useEnterBehavior() {
   return { enterBehavior, toggleEnterBehavior };
 }
 
+export function useModel() {
+  const { model, setModel } = useSettings();
+  return { model, setModel };
+}
+
 // Re-export types for convenience
-export type { Theme, EnterBehavior } from "../types/settings";
+export type { Theme, EnterBehavior, ModelChoice } from "../types/settings";
