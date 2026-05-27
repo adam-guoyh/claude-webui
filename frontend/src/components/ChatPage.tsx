@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Bars3Icon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
@@ -8,12 +8,17 @@ import type {
   ProjectInfo,
   PermissionMode,
 } from "../types";
+import type { AttachedImage } from "../../../shared/types";
 import { useClaudeStreaming } from "../hooks/useClaudeStreaming";
 import { useChatState } from "../hooks/chat/useChatState";
 import { usePermissions } from "../hooks/chat/usePermissions";
 import { usePermissionMode } from "../hooks/chat/usePermissionMode";
+import { useModel } from "../hooks/useSettings";
 import { useAbortController } from "../hooks/chat/useAbortController";
-import { useAutoHistoryLoader } from "../hooks/useHistoryLoader";
+import {
+  invalidateHistoryCache,
+  useAutoHistoryLoader,
+} from "../hooks/useHistoryLoader";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 import { UserMenu } from "./UserMenu";
@@ -37,6 +42,7 @@ export function ChatPage() {
   // Bumped after every finished chat turn so the sidebar refetches and shows
   // the new conversation entry / updated message count.
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
 
   // Extract and normalize working directory from URL
   const workingDirectory = (() => {
@@ -74,6 +80,9 @@ export function ChatPage() {
 
   // Permission mode state management
   const { permissionMode, setPermissionMode } = usePermissionMode();
+  // Model choice (persisted setting). "default" means: send no `model` field
+  // so the backend follows whatever the `claude` CLI default is.
+  const { model: modelChoice } = useModel();
 
   // Get encoded name for current working directory
   const getEncodedName = useCallback(() => {
@@ -100,10 +109,24 @@ export function ChatPage() {
     error: historyError,
     sessionId: loadedSessionId,
     loadHistory,
+    hasMoreMessages,
+    loadMoreHistory,
   } = useAutoHistoryLoader(
     getEncodedName() || undefined,
     sessionId || undefined,
   );
+
+  // Store encoded name for use in callbacks
+  const encodedProjectName = getEncodedName();
+
+  // Stable identity so ChatMessages doesn't see a new onLoadMore prop on
+  // every render (would defeat React.memo if it's ever added, and keeps the
+  // dep arrays in ChatMessages predictable).
+  const handleLoadMore = useCallback(async () => {
+    if (encodedProjectName && sessionId) {
+      await loadMoreHistory(encodedProjectName, sessionId);
+    }
+  }, [encodedProjectName, sessionId, loadMoreHistory]);
 
   // Resolve session label from the histories list. Cheap GET that the
   // sidebar already makes; we duplicate the request here so the
@@ -165,10 +188,49 @@ export function ChatPage() {
     generateRequestId,
     resetRequestState,
     startRequest,
+    setMessages,
   } = useChatState({
     initialMessages: historyMessages,
     initialSessionId: loadedSessionId || undefined,
   });
+
+  // Sync the loader's history into the chat-state `messages`. Two refs
+  // because we have to distinguish three cases that all show up as a
+  // `historyMessages` reference change:
+  //   * `loadedSessionId` is different → user switched sessions; adopt
+  //     the new history wholesale (the previous chat's messages must go).
+  //   * Same session, history grew → pagination loaded older messages;
+  //     prepend just the new prefix so we keep any new chat turns the
+  //     user added on top.
+  //   * Same session, history empty or shrank → loader cleared; let
+  //     the next batch be treated as a fresh initial load.
+  const prevSessionRef = useRef<string | null>(null);
+  const prevHistoryCountRef = useRef(0);
+
+  useEffect(() => {
+    if (historyMessages.length === 0) {
+      prevHistoryCountRef.current = 0;
+      return;
+    }
+
+    // Session change OR history shrank (refresh button resets to 30) →
+    // adopt the new history wholesale.
+    if (
+      prevSessionRef.current !== loadedSessionId ||
+      historyMessages.length < prevHistoryCountRef.current
+    ) {
+      setMessages(historyMessages);
+      prevSessionRef.current = loadedSessionId;
+      prevHistoryCountRef.current = historyMessages.length;
+      return;
+    }
+
+    if (historyMessages.length > prevHistoryCountRef.current) {
+      const newCount = historyMessages.length - prevHistoryCountRef.current;
+      setMessages((prev) => [...historyMessages.slice(0, newCount), ...prev]);
+      prevHistoryCountRef.current = historyMessages.length;
+    }
+  }, [historyMessages, loadedSessionId, setMessages]);
 
   const {
     allowedTools,
@@ -205,7 +267,7 @@ export function ChatPage() {
       overridePermissionMode?: PermissionMode,
     ) => {
       const content = messageContent || input.trim();
-      if (!content || isLoading) return;
+      if ((!content && !attachedImages.length) || isLoading) return;
 
       const requestId = generateRequestId();
 
@@ -233,6 +295,12 @@ export function ChatPage() {
             allowedTools: tools || allowedTools,
             ...(workingDirectory ? { workingDirectory } : {}),
             permissionMode: overridePermissionMode || permissionMode,
+            // Only send when the user picked a non-default — keeps the
+            // backend free to follow whatever the CLI's own default is.
+            ...(modelChoice && modelChoice !== "default"
+              ? { model: modelChoice }
+              : {}),
+            ...(attachedImages.length ? { images: attachedImages } : {}),
           } as ChatRequest),
         });
 
@@ -243,13 +311,23 @@ export function ChatPage() {
 
         let localHasReceivedInit = false;
         let shouldAbort = false;
+        // Latch the first session_id we see for this turn so we ignore later
+        // overwrites from sidechain / sub-agent assistant messages — those
+        // can ship their own session_id and would otherwise repoint us at
+        // the wrong on-disk JSONL on the next turn. Mirrors the backend's
+        // `taggedSessionId` guard in handlers/chat.ts.
+        let sessionIdLatched = false;
 
         const streamingContext: StreamingContext = {
           currentAssistantMessage,
           setCurrentAssistantMessage,
           addMessage,
           updateLastMessage,
-          onSessionId: setCurrentSessionId,
+          onSessionId: (sid: string) => {
+            if (sessionIdLatched) return;
+            sessionIdLatched = true;
+            setCurrentSessionId(sid);
+          },
           shouldShowInitMessage: () => !hasShownInitMessage,
           onInitMessageShown: () => setHasShownInitMessage(true),
           get hasReceivedInit() {
@@ -290,6 +368,14 @@ export function ChatPage() {
         });
       } finally {
         resetRequestState();
+        setAttachedImages([]);
+        // Invalidate the loader's in-memory cache for *this* session so a
+        // back-and-forth navigation re-fetches with the appended messages
+        // instead of replaying the stale snapshot.
+        const enc = getEncodedName();
+        if (enc && currentSessionId) {
+          invalidateHistoryCache(enc, currentSessionId);
+        }
         // Trigger sidebar refresh — a new session may have appeared or an
         // existing one's message count just changed on disk.
         setHistoryRefreshKey((k) => k + 1);
@@ -304,6 +390,7 @@ export function ChatPage() {
       currentAssistantMessage,
       workingDirectory,
       permissionMode,
+      modelChoice,
       generateRequestId,
       clearInput,
       startRequest,
@@ -553,6 +640,7 @@ export function ChatPage() {
                     onClick={() => {
                       const enc = getEncodedName();
                       if (enc && sessionId) {
+                        invalidateHistoryCache(enc, sessionId);
                         void loadHistory(enc, sessionId);
                       }
                       // Also bump the sidebar so its session list refetches —
@@ -618,7 +706,12 @@ export function ChatPage() {
               </div>
             ) : (
               <>
-                <ChatMessages messages={messages} isLoading={isLoading} />
+                <ChatMessages
+                  messages={messages}
+                  isLoading={isLoading}
+                  hasMoreMessages={!!(hasMoreMessages && sessionId)}
+                  onLoadMore={sessionId && encodedProjectName ? handleLoadMore : undefined}
+                />
                 <ChatInput
                   input={input}
                   isLoading={isLoading}
@@ -631,6 +724,8 @@ export function ChatPage() {
                   showPermissions={isPermissionMode}
                   permissionData={permissionData}
                   planPermissionData={planPermissionData}
+                  images={attachedImages}
+                  onImagesChange={setAttachedImages}
                 />
               </>
             )}

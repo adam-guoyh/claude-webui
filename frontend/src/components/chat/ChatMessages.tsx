@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useLayoutEffect } from "react";
 import type { AllMessage } from "../../types";
 import {
   isChatMessage,
@@ -24,35 +24,70 @@ import {
 interface ChatMessagesProps {
   messages: AllMessage[];
   isLoading: boolean;
+  hasMoreMessages?: boolean;
+  onLoadMore?: () => Promise<void>;
 }
 
-export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
+export function ChatMessages({
+  messages,
+  isLoading,
+  hasMoreMessages,
+  onLoadMore,
+}: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const wasLoadingRef = useRef(false);
+  const prevMessageCountRef = useRef(0);
+  // Records container.scrollHeight at the moment the user clicked "Load
+  // earlier messages". Read in the layout effect after the new messages
+  // commit to compute the scroll-top adjustment that keeps the user's
+  // previously-visible content in place. null when no pagination is pending.
+  const pendingPaginationRef = useRef<{ oldScrollHeight: number } | null>(null);
+  // Whether we've already jumped to the bottom for the current mount. Entering
+  // a session should land on the newest message, not the "Load earlier
+  // messages" button at the top. ChatMessages remounts on each (uncached)
+  // session load, so a per-mount ref resets naturally per session.
+  const didInitialScrollRef = useRef(false);
 
-  // Auto-scroll to bottom
   const scrollToBottom = () => {
     if (messagesEndRef.current && messagesEndRef.current.scrollIntoView) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   };
 
-  // Check if user is near bottom of messages (unused but kept for future use)
-  // const isNearBottom = () => {
-  //   const container = messagesContainerRef.current;
-  //   if (!container) return true;
-
-  //   const { scrollTop, scrollHeight, clientHeight } = container;
-  //   return (
-  //     scrollHeight - scrollTop - clientHeight <
-  //     UI_CONSTANTS.NEAR_BOTTOM_THRESHOLD_PX
-  //   );
-  // };
-
-  // Auto-scroll when messages change
+  // Auto-scroll to bottom when a chat turn finishes streaming.
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (wasLoadingRef.current && !isLoading && !loadingMore) {
+      scrollToBottom();
+    }
+    wasLoadingRef.current = isLoading;
+  }, [isLoading, loadingMore]);
+
+  // Preserve reading position when older messages are prepended via
+  // pagination. Without this, the newly added content at the top pushes
+  // the user's view downward and the message they were reading scrolls
+  // out of frame. We capture scrollHeight at click time and offset
+  // scrollTop by the delta after the commit — same visible content,
+  // just with more rows now sitting above the viewport.
+  useLayoutEffect(() => {
+    const grew = messages.length > prevMessageCountRef.current;
+    if (grew && pendingPaginationRef.current && messagesContainerRef.current) {
+      // Pagination: re-anchor so previously-visible content stays put.
+      const container = messagesContainerRef.current;
+      const delta = container.scrollHeight - pendingPaginationRef.current.oldScrollHeight;
+      if (delta > 0) {
+        container.scrollTop += delta;
+      }
+      pendingPaginationRef.current = null;
+    } else if (!didInitialScrollRef.current && messages.length > 0) {
+      // Initial session load: land on the newest message. Jump instantly
+      // (no smooth animation) so there's no visible scroll-from-top.
+      didInitialScrollRef.current = true;
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length]);
 
   const renderMessage = (message: AllMessage, index: number) => {
     // Use timestamp as key for stable rendering, fallback to index if needed
@@ -87,6 +122,29 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
         <>
           {/* Spacer div to push messages to the bottom */}
           <div className="flex-1" aria-hidden="true"></div>
+          {hasMoreMessages && (
+            <button
+              onClick={async () => {
+                // Snapshot scrollHeight so the layout effect can re-anchor
+                // the viewport after the new rows commit.
+                if (messagesContainerRef.current) {
+                  pendingPaginationRef.current = {
+                    oldScrollHeight: messagesContainerRef.current.scrollHeight,
+                  };
+                }
+                setLoadingMore(true);
+                try {
+                  await onLoadMore?.();
+                } finally {
+                  setLoadingMore(false);
+                }
+              }}
+              disabled={loadingMore}
+              className="self-center mb-4 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingMore ? "Loading..." : "Load earlier messages"}
+            </button>
+          )}
           {messages.map(renderMessage)}
           {isLoading && <LoadingComponent />}
           <div ref={messagesEndRef} />

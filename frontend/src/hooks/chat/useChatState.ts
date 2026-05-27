@@ -33,10 +33,10 @@ export function useChatState(options: ChatStateOptions = {}) {
   const [currentAssistantMessage, setCurrentAssistantMessage] =
     useState<ChatMessage | null>(null);
 
-  // Update messages and sessionId when initial values change
-  useEffect(() => {
-    setMessages(memoizedInitialMessages);
-  }, [memoizedInitialMessages]);
+  // Note: Do NOT auto-sync initialMessages to messages here.
+  // ChatPage handles message synchronization to support pagination without
+  // losing chat messages. Auto-syncing here would overwrite new chat messages
+  // when history is paginated.
 
   useEffect(() => {
     setCurrentSessionId(initialSessionId);

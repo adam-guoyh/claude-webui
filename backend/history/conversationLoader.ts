@@ -3,6 +3,7 @@
  * Handles loading and parsing specific conversation files
  */
 
+import { stat as fsStat } from "node:fs/promises";
 import type { RawHistoryLine } from "./parser.ts";
 import type { ConversationHistory } from "../../shared/types.ts";
 import { logger } from "../utils/logger.ts";
@@ -12,11 +13,41 @@ import { readTextFile, exists } from "../utils/fs.ts";
 import { getHomeDir } from "../utils/os.ts";
 
 /**
- * Load a specific conversation by session ID
+ * mtime+size keyed cache for parsed ConversationHistory. Hits skip both
+ * the 16-MB file read and the per-line JSON.parse loop. Append-only
+ * semantics make (mtime,size) a safe staleness signal.
+ */
+const conversationCache = new Map<
+  string,
+  { mtime: number; size: number; data: ConversationHistory }
+>();
+const CONVERSATION_CACHE_MAX = 8;
+
+function rememberConversation(
+  filePath: string,
+  mtime: number,
+  size: number,
+  data: ConversationHistory,
+): void {
+  if (conversationCache.size >= CONVERSATION_CACHE_MAX) {
+    const oldest = conversationCache.keys().next().value;
+    if (oldest !== undefined) conversationCache.delete(oldest);
+  }
+  conversationCache.set(filePath, { mtime, size, data });
+}
+
+/**
+ * Load a specific conversation by session ID with optional pagination
+ * @param encodedProjectName - Encoded project name
+ * @param sessionId - Session ID
+ * @param limit - Number of messages to return (default: 30 for recent messages)
+ * @param offset - Skip this many messages from the end (for loading older messages)
  */
 export async function loadConversation(
   encodedProjectName: string,
   sessionId: string,
+  limit?: number,
+  offset?: number,
 ): Promise<ConversationHistory | null> {
   // Validate inputs
   if (!validateEncodedProjectName(encodedProjectName)) {
@@ -42,11 +73,32 @@ export async function loadConversation(
     return null; // Session not found
   }
 
+  // mtime+size cache: re-fetch only when the JSONL has actually changed.
+  let mtime = 0;
+  let size = 0;
+  try {
+    const info = await fsStat(filePath);
+    mtime = info.mtime?.getTime() ?? 0;
+    size = info.size;
+    const cached = conversationCache.get(filePath);
+    if (cached && cached.mtime === mtime && cached.size === size) {
+      return cached.data;
+    }
+  } catch {
+    // Stat failure is non-fatal — fall through to the full read.
+  }
+
   try {
     const conversationHistory = await parseConversationFile(
       filePath,
       sessionId,
+      limit,
+      offset,
     );
+    if (mtime || size && !limit) {
+      // Only cache full history, not paginated results
+      rememberConversation(filePath, mtime, size, conversationHistory);
+    }
     return conversationHistory;
   } catch (error) {
     throw error; // Re-throw any parsing errors
@@ -56,10 +108,16 @@ export async function loadConversation(
 /**
  * Parse a specific conversation file
  * Converts JSONL lines to timestamped SDK messages
+ * @param filePath - Path to the conversation file
+ * @param sessionId - Session ID
+ * @param limit - Number of messages to return (default: 30 for recent messages)
+ * @param offset - Skip this many messages from the end (for loading older messages)
  */
 async function parseConversationFile(
   filePath: string,
   sessionId: string,
+  limit: number = 30,
+  offset: number = 0,
 ): Promise<ConversationHistory> {
   const content = await readTextFile(filePath);
   const lines = content
@@ -72,11 +130,23 @@ async function parseConversationFile(
   }
 
   const rawLines: RawHistoryLine[] = [];
+  // Valid message types that the frontend can handle
+  const validTypes = new Set(["system", "assistant", "user", "result"]);
 
   for (const line of lines) {
     try {
-      const parsed = JSON.parse(line) as RawHistoryLine;
-      rawLines.push(parsed);
+      const parsed = JSON.parse(line);
+      // Only include messages with timestamp and valid type
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "timestamp" in parsed &&
+        "type" in parsed &&
+        "sessionId" in parsed &&
+        validTypes.has((parsed as { type: unknown }).type)
+      ) {
+        rawLines.push(parsed as RawHistoryLine);
+      }
     } catch (parseError) {
       logger.history.error(`Failed to parse line in ${filePath}: {error}`, {
         error: parseError,
@@ -85,16 +155,25 @@ async function parseConversationFile(
     }
   }
 
+  // Apply pagination: take from end (most recent first, then older)
+  const totalCount = rawLines.length;
+  const startIdx = Math.max(0, totalCount - limit - offset);
+  const endIdx = Math.max(0, totalCount - offset);
+  const paginatedLines = rawLines.slice(startIdx, endIdx);
+
   // Process messages (restore timestamps, sort, etc.)
   const { messages: processedMessages, metadata } = processConversationMessages(
-    rawLines,
+    paginatedLines,
     sessionId,
   );
 
   return {
     sessionId,
     messages: processedMessages,
-    metadata,
+    metadata: {
+      ...metadata,
+      totalMessageCount: totalCount,
+    },
   };
 }
 
