@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useLayoutEffect } from "react";
+import { useRef, useState, useLayoutEffect } from "react";
 import type { AllMessage } from "../../types";
 import {
   isChatMessage,
@@ -19,7 +19,7 @@ import {
   TodoMessageComponent,
   LoadingComponent,
 } from "../MessageComponents";
-// import { UI_CONSTANTS } from "../../utils/constants"; // Unused for now
+import { UI_CONSTANTS } from "../../utils/constants";
 
 interface ChatMessagesProps {
   messages: AllMessage[];
@@ -37,8 +37,11 @@ export function ChatMessages({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const wasLoadingRef = useRef(false);
   const prevMessageCountRef = useRef(0);
+  // Whether the user is pinned near the bottom (auto-follow) vs. scrolled up
+  // reading history. Updated on scroll; consulted when messages change so a
+  // streamed reply follows the bottom without yanking a user who scrolled up.
+  const isNearBottomRef = useRef(true);
   // Records container.scrollHeight at the moment the user clicked "Load
   // earlier messages". Read in the layout effect after the new messages
   // commit to compute the scroll-top adjustment that keeps the user's
@@ -56,20 +59,24 @@ export function ChatMessages({
     }
   };
 
-  // Auto-scroll to bottom when a chat turn finishes streaming.
-  useEffect(() => {
-    if (wasLoadingRef.current && !isLoading && !loadingMore) {
-      scrollToBottom();
-    }
-    wasLoadingRef.current = isLoading;
-  }, [isLoading, loadingMore]);
+  // Track how close the user is to the bottom so we only auto-follow when
+  // they haven't deliberately scrolled up.
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    isNearBottomRef.current =
+      scrollHeight - scrollTop - clientHeight <
+      UI_CONSTANTS.NEAR_BOTTOM_THRESHOLD_PX;
+  };
 
-  // Preserve reading position when older messages are prepended via
-  // pagination. Without this, the newly added content at the top pushes
-  // the user's view downward and the message they were reading scrolls
-  // out of frame. We capture scrollHeight at click time and offset
-  // scrollTop by the delta after the commit — same visible content,
-  // just with more rows now sitting above the viewport.
+  // Single source of scroll behavior, keyed on the `messages` reference so it
+  // also fires for streaming updates (updateLastMessage keeps the same array
+  // length but a new reference). Precedence:
+  //   1. pagination prepend  → preserve the user's reading position
+  //   2. first load of a session → jump to the newest message
+  //   3. otherwise, if pinned near the bottom → auto-follow new/streaming msgs
+  // A user who scrolled up (case 3 false) is left alone.
   useLayoutEffect(() => {
     const grew = messages.length > prevMessageCountRef.current;
     if (grew && pendingPaginationRef.current && messagesContainerRef.current) {
@@ -85,9 +92,13 @@ export function ChatMessages({
       // (no smooth animation) so there's no visible scroll-from-top.
       didInitialScrollRef.current = true;
       messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      isNearBottomRef.current = true;
+    } else if (isNearBottomRef.current) {
+      // Auto-follow new or streaming messages while pinned to the bottom.
+      scrollToBottom();
     }
     prevMessageCountRef.current = messages.length;
-  }, [messages.length]);
+  }, [messages]);
 
   const renderMessage = (message: AllMessage, index: number) => {
     // Use timestamp as key for stable rendering, fallback to index if needed
@@ -114,6 +125,7 @@ export function ChatMessages({
   return (
     <div
       ref={messagesContainerRef}
+      onScroll={handleScroll}
       className="flex-1 overflow-y-auto bg-white/70 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 p-3 sm:p-6 mb-3 sm:mb-6 rounded-2xl shadow-sm backdrop-blur-sm flex flex-col"
     >
       {messages.length === 0 ? (
