@@ -26,6 +26,9 @@ interface ChatMessagesProps {
   isLoading: boolean;
   hasMoreMessages?: boolean;
   onLoadMore?: () => Promise<void>;
+  /** Active session id. A change resets the scroll state so a switched-back
+   *  session re-anchors to its newest message even on a cache hit (no remount). */
+  sessionId?: string | null;
 }
 
 export function ChatMessages({
@@ -33,6 +36,7 @@ export function ChatMessages({
   isLoading,
   hasMoreMessages,
   onLoadMore,
+  sessionId,
 }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -47,10 +51,10 @@ export function ChatMessages({
   // commit to compute the scroll-top adjustment that keeps the user's
   // previously-visible content in place. null when no pagination is pending.
   const pendingPaginationRef = useRef<{ oldScrollHeight: number } | null>(null);
-  // Whether we've already jumped to the bottom for the current mount. Entering
-  // a session should land on the newest message, not the "Load earlier
-  // messages" button at the top. ChatMessages remounts on each (uncached)
-  // session load, so a per-mount ref resets naturally per session.
+  // Whether we've already jumped to the bottom for the current session.
+  // Entering a session should land on the newest message, not the "Load
+  // earlier messages" button at the top. Reset on session change (below) so a
+  // cache-hit return — which does NOT remount this component — still re-anchors.
   const didInitialScrollRef = useRef(false);
 
   const scrollToBottom = () => {
@@ -58,6 +62,16 @@ export function ChatMessages({
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   };
+
+  // Reset scroll state when the session changes. Runs before the messages
+  // effect below (declaration order), so when the switched-to session's
+  // messages commit, the initial-load branch fires and lands on the newest
+  // message. Without this, a cache-hit return keeps the previous session's
+  // stale didInitialScroll/near-bottom state and may not re-anchor.
+  useLayoutEffect(() => {
+    didInitialScrollRef.current = false;
+    isNearBottomRef.current = true;
+  }, [sessionId]);
 
   // Track how close the user is to the bottom so we only auto-follow when
   // they haven't deliberately scrolled up.

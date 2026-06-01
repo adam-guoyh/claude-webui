@@ -9,6 +9,20 @@ export type EnterBehavior = "send" | "newline";
  */
 export type ModelChoice = "default" | "haiku" | "sonnet" | "opus";
 
+/**
+ * A session's stored model preference. The simple form (a bare ModelChoice) is
+ * the legacy/typical case: "this session uses opus." The override form is set
+ * when a rate-limit fallback fires — we remember what the user preferred
+ * before the fallback, and when (in Unix ms) the quota resets so we can
+ * auto-restore.
+ */
+export interface SessionModelOverride {
+  current: ModelChoice;
+  preferred?: ModelChoice;
+  resetAt?: number;
+}
+export type SessionModelEntry = ModelChoice | SessionModelOverride;
+
 export interface AppSettings {
   theme: Theme;
   enterBehavior: EnterBehavior;

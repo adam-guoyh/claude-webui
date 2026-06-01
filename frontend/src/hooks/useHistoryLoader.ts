@@ -185,7 +185,11 @@ export function useHistoryLoader(): HistoryLoaderResult {
           cachePut(cacheKey, conversationHistory);
         }
 
-        const convertedMessages = convertConversationHistory(conversationHistory.messages);
+        // The converter validates each entry internally; the server sends
+        // `unknown[]`, so narrow to satisfy the typed callback.
+        const convertedMessages = convertConversationHistory(
+          conversationHistory.messages as TimestampedSDKMessage[],
+        );
         const totalCount = conversationHistory.metadata?.totalMessageCount ?? conversationHistory.messages.length;
         const hasMore = offsetValue + limitValue < totalCount;
 

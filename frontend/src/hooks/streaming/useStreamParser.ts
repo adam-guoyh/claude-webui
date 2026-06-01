@@ -45,6 +45,7 @@ export function useStreamParser() {
         // Permission/Error handling
         onPermissionError: context.onPermissionError,
         onAbortRequest: context.onAbortRequest,
+        onRateLimit: context.onRateLimit,
       };
     },
     [],

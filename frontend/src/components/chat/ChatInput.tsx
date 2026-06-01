@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { StopIcon } from "@heroicons/react/24/solid";
 import { UI_CONSTANTS, KEYBOARD_SHORTCUTS } from "../../utils/constants";
-import { useEnterBehavior, useModel } from "../../hooks/useSettings";
+import { useEnterBehavior } from "../../hooks/useSettings";
 import { authFetch } from "../../utils/authFetch";
 import type { ModelChoice } from "../../types/settings";
 import { PermissionInputPanel } from "./PermissionInputPanel";
@@ -41,7 +41,9 @@ interface PlanPermissionData {
 
 interface AttachedImagePreview {
   data: string;
-  mediaType: string;
+  // Matches the shared AttachedImage union so this type is assignable to/from
+  // the parent's AttachedImage[] state.
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 }
 
 interface ChatInputProps {
@@ -60,6 +62,10 @@ interface ChatInputProps {
   // Image attachment props
   images?: AttachedImagePreview[];
   onImagesChange?: (images: AttachedImagePreview[]) => void;
+  // Model selection (per-session, resolved by the parent). Optional so
+  // read-only surfaces (e.g. the demo) can omit it.
+  model?: ModelChoice;
+  onModelChange?: (model: ModelChoice) => void;
 }
 
 export function ChatInput({
@@ -76,6 +82,8 @@ export function ChatInput({
   planPermissionData,
   images,
   onImagesChange,
+  model = "default",
+  onModelChange,
 }: ChatInputProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,7 +95,6 @@ export function ChatInput({
     "idle" | "recording" | "transcribing"
   >("idle");
   const { enterBehavior } = useEnterBehavior();
-  const { model, setModel } = useModel();
 
   // Focus input when not loading and not in permission mode
   useEffect(() => {
@@ -296,7 +303,10 @@ export function ChatInput({
       reader.onload = () => {
         const result = reader.result as string;
         const comma = result.indexOf(",");
-        const mediaType = result.slice(5, result.indexOf(";"));
+        const mediaType = result.slice(
+          5,
+          result.indexOf(";"),
+        ) as AttachedImagePreview["mediaType"];
         const data = result.slice(comma + 1);
         newImgs.push({ data, mediaType });
         done++;
@@ -319,7 +329,11 @@ export function ChatInput({
         const result = reader.result as string;
         const comma = result.indexOf(",");
         const data = result.slice(comma + 1);
-        newImgs.push({ data, mediaType: file.type || "image/jpeg" });
+        newImgs.push({
+          data,
+          mediaType: (file.type ||
+            "image/jpeg") as AttachedImagePreview["mediaType"],
+        });
         done++;
         if (done === files.length) {
           onImagesChange?.([...(images ?? []), ...newImgs]);
@@ -359,6 +373,29 @@ export function ChatInput({
     const modes: PermissionMode[] = ["default", "plan", "acceptEdits"];
     const currentIndex = modes.indexOf(current);
     return modes[(currentIndex + 1) % modes.length];
+  };
+
+  // Model selector. We send an explicit alias for each choice — the webui
+  // talks to the SDK in headless mode, whose default is NOT the interactive
+  // CLI's Opus 4.7 (it resolves to Sonnet here). So to actually get Opus 4.7
+  // we must pass --model opus rather than relying on "no model".
+  const MODEL_CYCLE: ModelChoice[] = ["opus", "sonnet", "haiku"];
+  const getModelLabel = (m: ModelChoice): string => {
+    switch (m) {
+      case "opus":
+        return "🧠 Opus 4.7";
+      case "sonnet":
+        return "🧠 Sonnet 4.6";
+      case "haiku":
+        return "🧠 Haiku 4.5";
+      case "default":
+        return "🧠 Default";
+    }
+  };
+  const getNextModel = (current: ModelChoice): ModelChoice => {
+    const i = MODEL_CYCLE.indexOf(current);
+    // Unknown/legacy value (e.g. "default") cycles into the explicit list.
+    return MODEL_CYCLE[(i + 1) % MODEL_CYCLE.length] ?? "opus";
   };
 
   // If we're in plan permission mode, show the plan permission panel instead
@@ -555,6 +592,14 @@ export function ChatInput({
           <span className="ml-2 text-slate-400 dark:text-slate-500 text-[10px]">
             - Click to cycle (Ctrl+Shift+M)
           </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onModelChange?.(getNextModel(model))}
+          className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-mono text-right transition-colors cursor-pointer shrink-0"
+          title={`Model for this session: ${getModelLabel(model)} - Click to cycle`}
+        >
+          {getModelLabel(model)}
         </button>
       </div>
     </div>

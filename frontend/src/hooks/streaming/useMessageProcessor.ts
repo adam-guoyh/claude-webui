@@ -17,6 +17,10 @@ export interface StreamingContext {
     toolUseId: string,
   ) => void;
   onAbortRequest?: () => void;
+  /** Fires when streamed assistant text matches the rate-limit phrase. The
+   *  raw text is passed through verbatim so the consumer can show the user
+   *  what upstream said and try to parse a reset time from it. */
+  onRateLimit?: (rawText: string) => void;
 }
 
 /**

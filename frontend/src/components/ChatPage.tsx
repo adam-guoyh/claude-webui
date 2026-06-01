@@ -13,7 +13,25 @@ import { useClaudeStreaming } from "../hooks/useClaudeStreaming";
 import { useChatState } from "../hooks/chat/useChatState";
 import { usePermissions } from "../hooks/chat/usePermissions";
 import { usePermissionMode } from "../hooks/chat/usePermissionMode";
-import { useModel } from "../hooks/useSettings";
+import type {
+  ModelChoice,
+  SessionModelEntry,
+} from "../types/settings";
+import {
+  STORAGE_KEYS,
+  getStorageItem,
+  setStorageItem,
+} from "../utils/storage";
+import {
+  nextFallbackModel,
+  parseResetAt,
+  resolveOverride,
+  resolveSessionModel,
+} from "../utils/rateLimit";
+import {
+  RateLimitDialog,
+  type RateLimitDialogData,
+} from "./chat/RateLimitDialog";
 import { useAbortController } from "../hooks/chat/useAbortController";
 import {
   invalidateHistoryCache,
@@ -80,9 +98,27 @@ export function ChatPage() {
 
   // Permission mode state management
   const { permissionMode, setPermissionMode } = usePermissionMode();
-  // Model choice (persisted setting). "default" means: send no `model` field
-  // so the backend follows whatever the `claude` CLI default is.
-  const { model: modelChoice } = useModel();
+  // Per-session model choice. "default" means: send no `model` field so the
+  // backend follows the `claude` CLI default (Opus 4.7). Overrides are keyed by
+  // sessionId in localStorage; a brand-new chat (no id yet) uses `pendingModel`
+  // until its session id is assigned, then the choice migrates onto that id.
+  // Stored entries are either a plain ModelChoice (legacy/typical) or an
+  // override object { current, preferred?, resetAt? } when a rate-limit
+  // fallback is active. resolveSessionModel handles both shapes.
+  const [sessionModels, setSessionModels] = useState<
+    Record<string, SessionModelEntry>
+  >(() => getStorageItem(STORAGE_KEYS.SESSION_MODELS, {}));
+  // New chats default to "default" — meaning: send no `--model`, let the SDK
+  // pick. We tried defaulting to "opus" for a better UX, but new chats failed
+  // (the SDK apparently doesn't accept `--model opus` cleanly here). Until that
+  // is sorted, defaulting to "default" keeps new chats working; users can opt
+  // into Opus 4.7 explicitly via the selector.
+  const [pendingModel, setPendingModel] = useState<ModelChoice>("default");
+  // Active rate-limit dialog. null when there's nothing to show. Set by the
+  // streaming `onRateLimit` callback; cleared on user choice. Guarded so a
+  // burst of streamed chunks doesn't reopen the dialog after the user closes.
+  const [rateLimitRequest, setRateLimitRequest] =
+    useState<RateLimitDialogData | null>(null);
 
   // Get encoded name for current working directory
   const getEncodedName = useCallback(() => {
@@ -194,6 +230,122 @@ export function ChatPage() {
     initialSessionId: loadedSessionId || undefined,
   });
 
+  // Resolve the model for the active session:
+  //   * existing session (from URL) → its override, else "default"
+  //   * new chat that just got an id → its override, else the pending choice
+  //   * brand-new chat (no id) → the pending choice
+  const effectiveModel: ModelChoice = sessionId
+    ? (resolveSessionModel(sessionModels[sessionId]) ?? "default")
+    : currentSessionId
+      ? (resolveSessionModel(sessionModels[currentSessionId]) ?? pendingModel)
+      : pendingModel;
+
+  const handleModelChange = useCallback(
+    (next: ModelChoice) => {
+      const target = sessionId ?? currentSessionId;
+      if (target) {
+        // User-initiated change clears any active rate-limit override —
+        // they're explicitly picking, so don't auto-restore later.
+        setSessionModels((prev) => {
+          const updated = { ...prev, [target]: next };
+          setStorageItem(STORAGE_KEYS.SESSION_MODELS, updated);
+          return updated;
+        });
+      } else {
+        setPendingModel(next);
+      }
+    },
+    [sessionId, currentSessionId],
+  );
+
+  // When a brand-new chat is assigned a session id, persist its pending model
+  // choice onto that id so it survives reloads / re-navigation.
+  const migratedModelRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      currentSessionId &&
+      pendingModel !== "default" &&
+      migratedModelRef.current !== currentSessionId
+    ) {
+      migratedModelRef.current = currentSessionId;
+      setSessionModels((prev) => {
+        if (prev[currentSessionId]) return prev;
+        const updated = { ...prev, [currentSessionId]: pendingModel };
+        setStorageItem(STORAGE_KEYS.SESSION_MODELS, updated);
+        return updated;
+      });
+    }
+  }, [currentSessionId, pendingModel]);
+
+  // Auto-restore the preferred model when a session's rate-limit override
+  // has expired. Runs on mount and then every minute — coarse enough to be
+  // cheap, fine enough that "resets 1:10pm" feels timely. Also covers the
+  // case where the override expired while the tab was closed.
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      setSessionModels((prev) => {
+        let changed = false;
+        const next: Record<string, SessionModelEntry> = { ...prev };
+        for (const [id, entry] of Object.entries(prev)) {
+          const ov = resolveOverride(entry);
+          if (
+            ov &&
+            ov.resetAt !== undefined &&
+            ov.resetAt <= now &&
+            ov.preferred !== undefined
+          ) {
+            next[id] = ov.preferred;
+            changed = true;
+          }
+        }
+        if (!changed) return prev;
+        setStorageItem(STORAGE_KEYS.SESSION_MODELS, next);
+        return next;
+      });
+    };
+    tick(); // catch already-expired overrides on mount
+    const handle = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(handle);
+  }, []);
+
+  // Apply the fallback the user just accepted in the rate-limit dialog.
+  // Persists override { current: fallback, preferred: original, resetAt? } so
+  // the tick effect above can flip it back when the quota resets.
+  const handleRateLimitSwitch = useCallback(() => {
+    if (!rateLimitRequest) return;
+    const target = sessionId ?? currentSessionId;
+    const { currentModel, fallbackModel, resetAt } = rateLimitRequest;
+    if (!fallbackModel) {
+      // No lower rung — just dismiss.
+      setRateLimitRequest(null);
+      return;
+    }
+    if (target) {
+      setSessionModels((prev) => {
+        const updated = {
+          ...prev,
+          [target]: {
+            current: fallbackModel,
+            preferred: currentModel,
+            ...(resetAt !== undefined ? { resetAt } : {}),
+          },
+        };
+        setStorageItem(STORAGE_KEYS.SESSION_MODELS, updated);
+        return updated;
+      });
+    } else {
+      // Brand-new chat that hasn't been assigned an id yet — just set the
+      // pending choice. We lose the auto-restore in this edge case (rare).
+      setPendingModel(fallbackModel);
+    }
+    setRateLimitRequest(null);
+  }, [rateLimitRequest, sessionId, currentSessionId]);
+
+  const handleRateLimitCancel = useCallback(() => {
+    setRateLimitRequest(null);
+  }, []);
+
   // Sync the loader's history into the chat-state `messages`. Two refs
   // because we have to distinguish three cases that all show up as a
   // `historyMessages` reference change:
@@ -209,6 +361,15 @@ export function ChatPage() {
 
   useEffect(() => {
     if (historyMessages.length === 0) {
+      // History cleared. If we were previously inside a session, the user
+      // just clicked "New Chat" (or otherwise navigated away); wipe the chat
+      // state so the screen actually reflects the empty session. Without this,
+      // useChatState keeps the prior session's messages and the click looks
+      // like a no-op.
+      if (prevSessionRef.current !== null) {
+        setMessages([]);
+      }
+      prevSessionRef.current = null;
       prevHistoryCountRef.current = 0;
       return;
     }
@@ -297,8 +458,8 @@ export function ChatPage() {
             permissionMode: overridePermissionMode || permissionMode,
             // Only send when the user picked a non-default — keeps the
             // backend free to follow whatever the CLI's own default is.
-            ...(modelChoice && modelChoice !== "default"
-              ? { model: modelChoice }
+            ...(effectiveModel && effectiveModel !== "default"
+              ? { model: effectiveModel }
               : {}),
             ...(attachedImages.length ? { images: attachedImages } : {}),
           } as ChatRequest),
@@ -317,6 +478,9 @@ export function ChatPage() {
         // the wrong on-disk JSONL on the next turn. Mirrors the backend's
         // `taggedSessionId` guard in handlers/chat.ts.
         let sessionIdLatched = false;
+        // Per-send guard: once the rate-limit detector fires we don't want to
+        // re-open the dialog on every subsequent text chunk in the same turn.
+        let rateLimitFired = false;
 
         const streamingContext: StreamingContext = {
           currentAssistantMessage,
@@ -341,6 +505,17 @@ export function ChatPage() {
           onAbortRequest: async () => {
             shouldAbort = true;
             await createAbortHandler(requestId)();
+          },
+          onRateLimit: (rawText: string) => {
+            if (rateLimitFired) return;
+            rateLimitFired = true;
+            const resetAt = parseResetAt(rawText);
+            setRateLimitRequest({
+              currentModel: effectiveModel,
+              fallbackModel: nextFallbackModel(effectiveModel),
+              ...(resetAt !== undefined ? { resetAt } : {}),
+              message: rawText,
+            });
           },
         };
 
@@ -390,7 +565,7 @@ export function ChatPage() {
       currentAssistantMessage,
       workingDirectory,
       permissionMode,
-      modelChoice,
+      effectiveModel,
       generateRequestId,
       clearInput,
       startRequest,
@@ -711,6 +886,7 @@ export function ChatPage() {
                   isLoading={isLoading}
                   hasMoreMessages={!!(hasMoreMessages && sessionId)}
                   onLoadMore={sessionId && encodedProjectName ? handleLoadMore : undefined}
+                  sessionId={sessionId}
                 />
                 <ChatInput
                   input={input}
@@ -726,6 +902,8 @@ export function ChatPage() {
                   planPermissionData={planPermissionData}
                   images={attachedImages}
                   onImagesChange={setAttachedImages}
+                  model={effectiveModel}
+                  onModelChange={handleModelChange}
                 />
               </>
             )}
@@ -754,6 +932,13 @@ export function ChatPage() {
         )}
 
         <SettingsModal isOpen={isSettingsOpen} onClose={handleSettingsClose} />
+        {rateLimitRequest && (
+          <RateLimitDialog
+            data={rateLimitRequest}
+            onSwitch={handleRateLimitSwitch}
+            onCancel={handleRateLimitCancel}
+          />
+        )}
       </div>
     </div>
   );

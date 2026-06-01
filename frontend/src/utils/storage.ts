@@ -4,6 +4,8 @@ import { CURRENT_SETTINGS_VERSION } from "../types/settings";
 export const STORAGE_KEYS = {
   // Unified settings key
   SETTINGS: "claude-code-webui-settings",
+  // Per-session model overrides: { [sessionId]: ModelChoice }
+  SESSION_MODELS: "claude-code-webui-session-models",
   // Legacy keys for migration
   THEME: "claude-code-webui-theme",
   ENTER_BEHAVIOR: "claude-code-webui-enter-behavior",

@@ -74,13 +74,18 @@ export async function loadConversation(
   }
 
   // mtime+size cache: re-fetch only when the JSONL has actually changed.
+  // The cache key must include `limit` and `offset` — without them the same
+  // entry would satisfy every page, so paginated requests would all return
+  // the initial-load batch. Each (file, window) pair gets its own entry,
+  // invalidated together when the JSONL changes.
+  const cacheKey = `${filePath}|${limit ?? "all"}|${offset ?? 0}`;
   let mtime = 0;
   let size = 0;
   try {
     const info = await fsStat(filePath);
     mtime = info.mtime?.getTime() ?? 0;
     size = info.size;
-    const cached = conversationCache.get(filePath);
+    const cached = conversationCache.get(cacheKey);
     if (cached && cached.mtime === mtime && cached.size === size) {
       return cached.data;
     }
@@ -95,9 +100,8 @@ export async function loadConversation(
       limit,
       offset,
     );
-    if (mtime || size && !limit) {
-      // Only cache full history, not paginated results
-      rememberConversation(filePath, mtime, size, conversationHistory);
+    if (mtime || size) {
+      rememberConversation(cacheKey, mtime, size, conversationHistory);
     }
     return conversationHistory;
   } catch (error) {

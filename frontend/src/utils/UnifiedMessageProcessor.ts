@@ -14,6 +14,7 @@ import {
   createTodoMessageFromInput,
 } from "./messageConversion";
 import { isThinkingContentItem } from "./messageTypes";
+import { looksLikeRateLimit } from "./rateLimit";
 import { extractToolInfo, generateToolPatterns } from "./toolUtils";
 
 /**
@@ -52,6 +53,10 @@ export interface ProcessingContext {
     toolUseId: string,
   ) => void;
   onAbortRequest?: () => void;
+  /** Fires when streamed assistant text matches the upstream rate-limit
+   *  phrase. Caller gets the raw text and decides what to do (e.g. show a
+   *  dialog and offer to fall back to a different model). */
+  onRateLimit?: (rawText: string) => void;
 }
 
 /**
@@ -221,6 +226,15 @@ export class UnifiedMessageProcessor {
     };
     context.setCurrentAssistantMessage?.(updatedMessage);
     context.updateLastMessage?.(updatedContent);
+
+    // Rate-limit detection. Upstream surfaces session/usage limits as a
+    // human-readable assistant message (e.g. "You've hit your session limit
+    // · resets 1:10pm (Asia/Shanghai)"). Fire the callback so the UI can
+    // offer a fallback model; the caller is expected to dedupe across
+    // multiple chunks of the same turn.
+    if (context.onRateLimit && looksLikeRateLimit(updatedContent)) {
+      context.onRateLimit(updatedContent);
+    }
   }
 
   /**
