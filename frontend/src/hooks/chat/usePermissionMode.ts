@@ -7,6 +7,7 @@ export interface UsePermissionModeResult {
   isPlanMode: boolean;
   isDefaultMode: boolean;
   isAcceptEditsMode: boolean;
+  isBypassMode: boolean;
 }
 
 /**
@@ -28,5 +29,6 @@ export function usePermissionMode(): UsePermissionModeResult {
     isPlanMode: permissionMode === "plan",
     isDefaultMode: permissionMode === "default",
     isAcceptEditsMode: permissionMode === "acceptEdits",
+    isBypassMode: permissionMode === "bypassPermissions",
   };
 }

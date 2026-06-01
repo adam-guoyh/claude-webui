@@ -11,6 +11,7 @@ A self-hosted web frontend for the [`claude` CLI](https://github.com/anthropics/
 - **Sidebar that scales** — always-visible session list, inline rename, delete, owner badges (admins see everyone's, grouped by owner with collapsible sections).
 - **Paginated history** — opening a session loads the newest 30 messages and lands on the latest reply; a "Load earlier messages" button pulls older messages in 30-message pages, keeping your reading position steady. Big transcripts open fast instead of parsing the whole JSONL up front.
 - **Model picker** — choose Haiku / Sonnet / Opus (or the CLI default) per session from the chat input.
+- **Permission modes incl. unattended** — cycle the status-bar indicator between `normal`, `plan`, `accept edits`, and `unattended (bypass)`. The last one auto-approves every tool call so long-running tasks don't stall waiting for clicks; use only when you trust the task.
 - **Voice + image input** — dictate via an OpenAI-compatible speech-to-text service (`--stt-url`), and attach images to a turn.
 - **Usage stats** — admin stats page backed by `/api/stats`, broken down by user and model with a configurable time window.
 - **Admin tooling** — dedicated `/admin/users` page for adding / removing accounts; admin-only "move session" dialog that searches the real user list.
@@ -295,7 +296,7 @@ POST   /api/stt                 multipart form-data { file }; proxies to the con
 GET    /api/stats?minutes=N                              → { success, data: { total, recent, window, byUser, byModel, totalTokens, recentTokens } }
 ```
 
-`model` accepts the CLI's short aliases (`haiku` / `sonnet` / `opus`) or a full model id; empty/undefined uses the `claude` CLI default. `images` is an array of base64-encoded attachments (`{ mediaType, data }`, where mediaType is one of jpeg/png/gif/webp).
+`model` accepts the CLI's short aliases (`haiku` / `sonnet` / `opus`) or a full model id; empty/undefined uses the `claude` CLI default. `images` is an array of base64-encoded attachments (`{ mediaType, data }`, where mediaType is one of jpeg/png/gif/webp). `permissionMode` is one of `default` / `plan` / `acceptEdits` / `bypassPermissions` — `bypassPermissions` tells the SDK to skip every permission prompt (unattended mode).
 
 Integrations (multi-user mode, gated; per-caller):
 

@@ -353,6 +353,8 @@ export function ChatInput({
         return "⏸ plan mode";
       case "acceptEdits":
         return "⏵⏵ accept edits";
+      case "bypassPermissions":
+        return "🚨 unattended (auto-approve all)";
     }
   };
 
@@ -365,12 +367,19 @@ export function ChatInput({
         return "plan mode";
       case "acceptEdits":
         return "accept edits";
+      case "bypassPermissions":
+        return "unattended (auto-approve all)";
     }
   };
 
   // Get next permission mode for cycling
   const getNextPermissionMode = (current: PermissionMode): PermissionMode => {
-    const modes: PermissionMode[] = ["default", "plan", "acceptEdits"];
+    const modes: PermissionMode[] = [
+      "default",
+      "plan",
+      "acceptEdits",
+      "bypassPermissions",
+    ];
     const currentIndex = modes.indexOf(current);
     return modes[(currentIndex + 1) % modes.length];
   };
