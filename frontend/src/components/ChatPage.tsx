@@ -12,7 +12,6 @@ import type { AttachedImage } from "../../../shared/types";
 import { useClaudeStreaming } from "../hooks/useClaudeStreaming";
 import { useChatState } from "../hooks/chat/useChatState";
 import { usePermissions } from "../hooks/chat/usePermissions";
-import { usePermissionMode } from "../hooks/chat/usePermissionMode";
 import type {
   ModelChoice,
   SessionModelEntry,
@@ -21,6 +20,7 @@ import {
   STORAGE_KEYS,
   getStorageItem,
   setStorageItem,
+  removeStorageItem,
 } from "../utils/storage";
 import {
   nextFallbackModel,
@@ -43,7 +43,12 @@ import { UserMenu } from "./UserMenu";
 import { ChatInput } from "./chat/ChatInput";
 import { ChatMessages } from "./chat/ChatMessages";
 import { SessionSidebar } from "./chat/SessionSidebar";
-import { getChatUrl, getHistoriesUrl, getProjectsUrl } from "../config/api";
+import {
+  getApiUrl,
+  getChatUrl,
+  getHistoriesUrl,
+  getProjectsUrl,
+} from "../config/api";
 import { authFetch } from "../utils/authFetch";
 import { KEYBOARD_SHORTCUTS } from "../utils/constants";
 import { normalizeWindowsPath } from "../utils/pathUtils";
@@ -97,7 +102,14 @@ export function ChatPage() {
   const { abortRequest, createAbortHandler } = useAbortController();
 
   // Permission mode state management
-  const { permissionMode, setPermissionMode } = usePermissionMode();
+  // Per-session permission mode. Stored as { [sessionId]: PermissionMode }.
+  // A brand-new chat (no id yet) uses `pendingPermissionMode`; the choice
+  // migrates onto the real session id once it's assigned (see effect below).
+  const [sessionPermissionModes, setSessionPermissionModes] = useState<
+    Record<string, PermissionMode>
+  >(() => getStorageItem(STORAGE_KEYS.SESSION_PERMISSION_MODES, {}));
+  const [pendingPermissionMode, setPendingPermissionMode] =
+    useState<PermissionMode>("default");
   // Per-session model choice. "default" means: send no `model` field so the
   // backend follows the `claude` CLI default (Opus 4.7). Overrides are keyed by
   // sessionId in localStorage; a brand-new chat (no id yet) uses `pendingModel`
@@ -277,6 +289,49 @@ export function ChatPage() {
     }
   }, [currentSessionId, pendingModel]);
 
+  // Same shape as the model picker above — resolved permission mode for the
+  // active session, plus a handler that routes to the per-session override or
+  // the pending slot. Without this, every session shared a single mode and
+  // switching one flipped them all.
+  const effectivePermissionMode: PermissionMode = sessionId
+    ? (sessionPermissionModes[sessionId] ?? "default")
+    : currentSessionId
+      ? (sessionPermissionModes[currentSessionId] ?? pendingPermissionMode)
+      : pendingPermissionMode;
+
+  const handlePermissionModeChange = useCallback(
+    (next: PermissionMode) => {
+      const target = sessionId ?? currentSessionId;
+      if (target) {
+        setSessionPermissionModes((prev) => {
+          const updated = { ...prev, [target]: next };
+          setStorageItem(STORAGE_KEYS.SESSION_PERMISSION_MODES, updated);
+          return updated;
+        });
+      } else {
+        setPendingPermissionMode(next);
+      }
+    },
+    [sessionId, currentSessionId],
+  );
+
+  const migratedPermissionModeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      currentSessionId &&
+      pendingPermissionMode !== "default" &&
+      migratedPermissionModeRef.current !== currentSessionId
+    ) {
+      migratedPermissionModeRef.current = currentSessionId;
+      setSessionPermissionModes((prev) => {
+        if (prev[currentSessionId]) return prev;
+        const updated = { ...prev, [currentSessionId]: pendingPermissionMode };
+        setStorageItem(STORAGE_KEYS.SESSION_PERMISSION_MODES, updated);
+        return updated;
+      });
+    }
+  }, [currentSessionId, pendingPermissionMode]);
+
   // Auto-restore the preferred model when a session's rate-limit override
   // has expired. Runs on mount and then every minute — coarse enough to be
   // cheap, fine enough that "resets 1:10pm" feels timely. Also covers the
@@ -346,6 +401,85 @@ export function ChatPage() {
     setRateLimitRequest(null);
   }, []);
 
+  // Pending auto-resume — the server actually fires this; the frontend only
+  // stores { id, sessionId, dueAt } so the UI remembers a wait is scheduled
+  // and so a manual send can DELETE the entry by id. The `content` lives on
+  // the server. Persisted to localStorage so a reload keeps the UI honest.
+  // Hours/days-old entries are dropped on hydration; the server independently
+  // discards anything more than a day stale.
+  const PENDING_RETRY_STALENESS_MS = 30 * 60 * 1000;
+  const [pendingRetry, setPendingRetry] = useState<{
+    id: string;
+    sessionId: string | null;
+    dueAt: number;
+  } | null>(() => {
+    const stored = getStorageItem<{
+      id: string;
+      sessionId: string | null;
+      dueAt: number;
+    } | null>(STORAGE_KEYS.PENDING_RETRY, null);
+    if (!stored) return null;
+    if (stored.dueAt < Date.now() - PENDING_RETRY_STALENESS_MS) return null;
+    return stored;
+  });
+
+  useEffect(() => {
+    if (pendingRetry) {
+      setStorageItem(STORAGE_KEYS.PENDING_RETRY, pendingRetry);
+    } else {
+      removeStorageItem(STORAGE_KEYS.PENDING_RETRY);
+    }
+  }, [pendingRetry]);
+
+  const handleRateLimitAutoResume = useCallback(async () => {
+    if (!rateLimitRequest) return;
+    const { resetAt, failedUserMessage } = rateLimitRequest;
+    if (resetAt === undefined || !failedUserMessage) return;
+    const target = sessionId ?? currentSessionId;
+    const enc = encodedProjectName;
+    if (!target || !enc || !workingDirectory) {
+      // No session id / no project context — can't ask the server to resume
+      // this turn. Close the dialog so the user isn't stuck.
+      setRateLimitRequest(null);
+      return;
+    }
+    // Close the dialog optimistically; the POST happens in the background.
+    setRateLimitRequest(null);
+    try {
+      const res = await authFetch(getApiUrl("/api/pending-retries"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          encodedProjectName: enc,
+          sessionId: target,
+          workingDirectory,
+          content: failedUserMessage,
+          ...(effectiveModel && effectiveModel !== "default"
+            ? { model: effectiveModel }
+            : {}),
+          permissionMode: effectivePermissionMode,
+          dueAt: resetAt,
+        }),
+      });
+      if (!res.ok) {
+        console.warn("Failed to schedule pending retry", res.status);
+        return;
+      }
+      const body = (await res.json()) as { id: string };
+      setPendingRetry({ id: body.id, sessionId: target, dueAt: resetAt });
+    } catch (error) {
+      console.warn("Failed to schedule pending retry", error);
+    }
+  }, [
+    rateLimitRequest,
+    sessionId,
+    currentSessionId,
+    encodedProjectName,
+    workingDirectory,
+    effectiveModel,
+    effectivePermissionMode,
+  ]);
+
   // Sync the loader's history into the chat-state `messages`. Two refs
   // because we have to distinguish three cases that all show up as a
   // `historyMessages` reference change:
@@ -406,7 +540,7 @@ export function ChatPage() {
     closePlanModeRequest,
     updatePermissionMode,
   } = usePermissions({
-    onPermissionModeChange: setPermissionMode,
+    onPermissionModeChange: handlePermissionModeChange,
   });
 
   const handlePermissionError = useCallback(
@@ -429,6 +563,18 @@ export function ChatPage() {
     ) => {
       const content = messageContent || input.trim();
       if ((!content && !attachedImages.length) || isLoading) return;
+
+      // Sending anything cancels any scheduled auto-resume — the user has
+      // taken over. Best-effort: also DELETE the entry server-side so the
+      // backend timer doesn't fire it. If the DELETE fails (network blip,
+      // 404 because it already fired), we still drop local state.
+      if (pendingRetry?.id) {
+        const id = pendingRetry.id;
+        void authFetch(getApiUrl(`/api/pending-retries/${id}`), {
+          method: "DELETE",
+        }).catch(() => undefined);
+      }
+      setPendingRetry(null);
 
       const requestId = generateRequestId();
 
@@ -455,7 +601,7 @@ export function ChatPage() {
             ...(currentSessionId ? { sessionId: currentSessionId } : {}),
             allowedTools: tools || allowedTools,
             ...(workingDirectory ? { workingDirectory } : {}),
-            permissionMode: overridePermissionMode || permissionMode,
+            permissionMode: overridePermissionMode || effectivePermissionMode,
             // Only send when the user picked a non-default — keeps the
             // backend free to follow whatever the CLI's own default is.
             ...(effectiveModel && effectiveModel !== "default"
@@ -515,6 +661,10 @@ export function ChatPage() {
               fallbackModel: nextFallbackModel(effectiveModel),
               ...(resetAt !== undefined ? { resetAt } : {}),
               message: rawText,
+              // Stash the user-typed input so the dialog can offer
+              // "wait & auto-resume" — the parent re-sends `content` at
+              // resetAt without the user typing again.
+              failedUserMessage: content,
             });
           },
         };
@@ -564,7 +714,7 @@ export function ChatPage() {
       hasShownInitMessage,
       currentAssistantMessage,
       workingDirectory,
-      permissionMode,
+      effectivePermissionMode,
       effectiveModel,
       generateRequestId,
       clearInput,
@@ -895,8 +1045,8 @@ export function ChatPage() {
                   onInputChange={setInput}
                   onSubmit={() => sendMessage()}
                   onAbort={handleAbort}
-                  permissionMode={permissionMode}
-                  onPermissionModeChange={setPermissionMode}
+                  permissionMode={effectivePermissionMode}
+                  onPermissionModeChange={handlePermissionModeChange}
                   showPermissions={isPermissionMode}
                   permissionData={permissionData}
                   planPermissionData={planPermissionData}
@@ -937,6 +1087,7 @@ export function ChatPage() {
             data={rateLimitRequest}
             onSwitch={handleRateLimitSwitch}
             onCancel={handleRateLimitCancel}
+            onAutoResume={handleRateLimitAutoResume}
           />
         )}
       </div>

@@ -20,18 +20,28 @@ export interface RateLimitDialogData {
   /** Raw upstream error text — shown verbatim so the user sees what
    *  actually happened, regex coverage notwithstanding. */
   message: string;
+  /** The user-typed message that triggered this rate-limited turn. Set when
+   *  available so the parent can offer an auto-resume at `resetAt`. */
+  failedUserMessage?: string;
 }
 
 export function RateLimitDialog({
   data,
   onSwitch,
   onCancel,
+  onAutoResume,
 }: {
   data: RateLimitDialogData;
   onSwitch: () => void;
   onCancel: () => void;
+  /** Optional: only renders the "wait and auto-resume" button when both this
+   *  handler and a parsed resetAt are present. */
+  onAutoResume?: () => void;
 }) {
-  const { currentModel, fallbackModel, resetAt, message } = data;
+  const { currentModel, fallbackModel, resetAt, message, failedUserMessage } =
+    data;
+  const canAutoResume =
+    !!onAutoResume && resetAt !== undefined && !!failedUserMessage;
   return (
     <div
       role="dialog"
@@ -51,7 +61,7 @@ export function RateLimitDialog({
             恢复后自动切回 {MODEL_LABEL[currentModel]}。
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
@@ -59,6 +69,16 @@ export function RateLimitDialog({
           >
             取消
           </button>
+          {canAutoResume && (
+            <button
+              type="button"
+              onClick={onAutoResume}
+              className="px-3 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+              title="到点会自动重新发送你刚才那条消息"
+            >
+              等 {formatResetAt(resetAt as number)} 自动重发
+            </button>
+          )}
           {fallbackModel ? (
             <button
               type="button"
@@ -68,9 +88,11 @@ export function RateLimitDialog({
               切到 {MODEL_LABEL[fallbackModel]}
             </button>
           ) : (
-            <span className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">
-              已是最低档,无可降级
-            </span>
+            !canAutoResume && (
+              <span className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">
+                已是最低档,无可降级
+              </span>
+            )
           )}
         </div>
       </div>

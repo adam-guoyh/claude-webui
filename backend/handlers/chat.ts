@@ -19,7 +19,7 @@ import { recordUsage } from "../utils/usageStats.ts";
  * @param permissionMode - Optional permission mode for Claude execution
  * @returns AsyncGenerator yielding StreamResponse objects
  */
-async function* executeClaudeCommand(
+export async function* executeClaudeCommand(
   message: string,
   requestId: string,
   requestAbortControllers: Map<string, AbortController>,

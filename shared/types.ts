@@ -177,6 +177,44 @@ export interface IntegrationPermissionsResponse {
 // Conversation history types
 // Note: messages are typed as unknown[] to avoid frontend/backend dependency issues
 // Frontend should cast to TimestampedSDKMessage[] (defined in frontend/src/types.ts)
+/**
+ * A scheduled "auto-resume after rate limit" retry, persisted server-side so
+ * it fires when the quota window opens even if the user's browser is closed.
+ * The server runs the SDK silently at `dueAt`; the new turn lands in the
+ * session's JSONL just like any other reply.
+ */
+export interface PendingRetry {
+  id: string;
+  /** Username at scheduling time, or null in open/legacy-token mode. */
+  owner: string | null;
+  encodedProjectName: string;
+  sessionId: string;
+  workingDirectory: string;
+  content: string;
+  /** Model alias / id captured at scheduling time. */
+  model?: string;
+  permissionMode?: string;
+  /** Unix ms when the quota resets and we should fire. */
+  dueAt: number;
+  /** Unix ms the entry was created — for debugging / staleness inspection. */
+  createdAt: number;
+}
+
+export interface PendingRetryCreateRequest {
+  encodedProjectName: string;
+  sessionId: string;
+  workingDirectory: string;
+  content: string;
+  model?: string;
+  permissionMode?: string;
+  dueAt: number;
+}
+
+export interface PendingRetryListResponse {
+  /** Caller-scoped list: own entries for regular users, all for admins. */
+  retries: PendingRetry[];
+}
+
 export interface ConversationHistory {
   sessionId: string;
   messages: unknown[]; // TimestampedSDKMessage[] in practice, but avoiding frontend type dependency

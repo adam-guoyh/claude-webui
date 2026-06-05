@@ -147,7 +147,7 @@ async function parseConversationFile(
         "timestamp" in parsed &&
         "type" in parsed &&
         "sessionId" in parsed &&
-        validTypes.has((parsed as { type: unknown }).type)
+        validTypes.has((parsed as { type: string }).type)
       ) {
         rawLines.push(parsed as RawHistoryLine);
       }

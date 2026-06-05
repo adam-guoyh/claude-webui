@@ -49,6 +49,12 @@ import { handleSttRequest } from "./handlers/stt.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
 import { handleStatsRequest } from "./handlers/stats.ts";
 import {
+  handleCreatePendingRetry,
+  handleDeletePendingRetry,
+  handleListPendingRetries,
+} from "./handlers/pendingRetries.ts";
+import * as pendingRetryScheduler from "./pendingRetries/scheduler.ts";
+import {
   handleAddLarkApp,
   handleAddQqApp,
   handleGetIntegrationPermissions,
@@ -348,6 +354,13 @@ export function createApp(
 
   app.get("/api/stats", (c) => handleStatsRequest(c));
 
+  // Pending retries — server-scheduled auto-resume after a rate-limit dialog.
+  // Gated like the other /api/* endpoints; visibility is owner/admin and
+  // enforced inside the handlers themselves.
+  app.get("/api/pending-retries", (c) => handleListPendingRetries(c));
+  app.post("/api/pending-retries", (c) => handleCreatePendingRetry(c));
+  app.delete("/api/pending-retries/:id", (c) => handleDeletePendingRetry(c));
+
   // Integrations (IM account ↔ webui user). Only mounted in multi-user mode
   // since each binding has to belong to a real user; without a users file
   // there is no "self" to bind. Returns 404 otherwise.
@@ -438,6 +451,14 @@ export function createApp(
       );
     });
   }
+
+  // Restore any scheduled rate-limit auto-resumes from disk. Anything whose
+  // dueAt has passed fires immediately (within the scheduler's staleness
+  // window); the rest get a setTimeout. Fire-and-forget — the HTTP server
+  // can come up before the queue finishes booting.
+  pendingRetryScheduler.boot(config.cliPath).catch((error) => {
+    logger.cli.warn("pending-retries boot failed: {error}", { error });
+  });
 
   return app;
 }

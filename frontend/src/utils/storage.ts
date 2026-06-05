@@ -6,6 +6,13 @@ export const STORAGE_KEYS = {
   SETTINGS: "claude-code-webui-settings",
   // Per-session model overrides: { [sessionId]: ModelChoice }
   SESSION_MODELS: "claude-code-webui-session-models",
+  // Per-session permission mode overrides: { [sessionId]: PermissionMode }
+  SESSION_PERMISSION_MODES: "claude-code-webui-session-permission-modes",
+  // The single scheduled "auto-resume after rate limit" retry. Persisted so a
+  // page reload (or accidentally closing/reopening the tab) doesn't lose the
+  // wait. We treat it as stale and discard on hydration if dueAt is more than
+  // a small window in the past.
+  PENDING_RETRY: "claude-code-webui-pending-retry",
   // Legacy keys for migration
   THEME: "claude-code-webui-theme",
   ENTER_BEHAVIOR: "claude-code-webui-enter-behavior",
