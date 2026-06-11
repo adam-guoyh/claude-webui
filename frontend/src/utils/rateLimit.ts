@@ -40,8 +40,12 @@ const RATE_LIMIT_PATTERNS: RegExp[] = [
   /quota (?:exceeded|reached)/i,
 ];
 
+// Matches "resets HH:MM am/pm (TZ)" and the no-minutes shorthand
+// "resets Ham/pm (TZ)" (the form Anthropic actually uses for whole-hour
+// resets, e.g. "resets 2pm (Asia/Shanghai)"). The minutes group is
+// optional and defaults to 0 when absent.
 const RESET_PATTERN =
-  /resets?\s+(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?\s*\(([^)]+)\)/i;
+  /resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*\(([^)]+)\)/i;
 
 /** Models we cycle through when the active one is rate-limited. The user
  *  can still pick anything via the selector — this is only the auto-step. */
@@ -76,7 +80,8 @@ export function parseResetAt(text: string): number | undefined {
   const m = text.match(RESET_PATTERN);
   if (!m) return undefined;
   let hour = Number(m[1]);
-  const minute = Number(m[2]);
+  // Minutes are optional in upstream wording — "resets 2pm" gets no `:00`.
+  const minute = m[2] ? Number(m[2]) : 0;
   const ampm = m[3]?.toLowerCase();
   const tz = m[4];
   if (Number.isNaN(hour) || Number.isNaN(minute)) return undefined;
